@@ -38,6 +38,7 @@ from backend.auth import get_token_for_session, router as auth_router
 from backend.cleanup import cleanup_loop
 from backend.events import make_sse_response, sse_generator
 from backend.jobs import RUNS_DIR, JobManager, Status
+from backend.payments import router as payments_router
 from backend.runner import run_job
 from backend.security import validate_url
 
@@ -69,6 +70,7 @@ app = FastAPI(title="auto-mcp", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.include_router(auth_router)
+app.include_router(payments_router)
 
 app.add_middleware(
     CORSMiddleware,

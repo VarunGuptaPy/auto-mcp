@@ -40,10 +40,16 @@ export default function DonePage() {
         </span>
         <div className="flex-1" />
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/dashboard")}
           className="text-xs px-3 py-1.5 border border-border rounded-md text-text2 hover:border-muted transition-colors"
         >
-          ← New job
+          ← Dashboard
+        </button>
+        <button
+          onClick={() => router.push("/create")}
+          className="text-xs px-3 py-1.5 border border-border rounded-md text-text2 hover:border-muted transition-colors"
+        >
+          + New MCP
         </button>
       </header>
 
