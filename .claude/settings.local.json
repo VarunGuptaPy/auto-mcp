@@ -16,7 +16,18 @@
       "Bash(/Users/varungupta/anaconda3/bin/pip install *)",
       "Bash(npx tsc *)",
       "Bash(kill 18792)",
-      "Bash(DEEPSEEK_API_KEY=sk-100ffb6d5e154901bebf48c6fa167f27 python -m uvicorn backend.main:app --port 8000 --log-level debug)"
+      "Bash(DEEPSEEK_API_KEY=sk-100ffb6d5e154901bebf48c6fa167f27 python -m uvicorn backend.main:app --port 8000 --log-level debug)",
+      "Bash(pip3 show *)",
+      "Bash(/Users/varungupta/Desktop/varunCrazyProject/auto-mcp/.venv/bin/pip show *)",
+      "Bash(python3 -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(python3 -c \"import chromadb; print\\('chromadb version:', chromadb.__version__\\)\")",
+      "Bash(conda run *)",
+      "Bash(/opt/homebrew/bin/pip3 show *)",
+      "Bash(/opt/homebrew/anaconda3/bin/pip3 show *)",
+      "Bash(/usr/local/bin/pip3 show *)",
+      "Bash(/Library/Frameworks/Python.framework/Versions/3.11/bin/pip3 show *)",
+      "Bash(pip list *)",
+      "Bash(python3 -m py_compile code_analyzer/vector_store.py code_analyzer/github_fetcher.py code_analyzer/route_extractor.py code_analyzer/env_detector.py code_analyzer/merge.py backend/runner.py backend/main.py backend/auth.py backend/jobs.py explorer/agent.py generator/generate.py)"
     ]
   }
 }

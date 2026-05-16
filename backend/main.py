@@ -34,6 +34,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from backend.auth import get_token_for_session, router as auth_router
 from backend.cleanup import cleanup_loop
 from backend.events import make_sse_response, sse_generator
 from backend.jobs import RUNS_DIR, JobManager, Status
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="auto-mcp", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -83,8 +85,9 @@ app.add_middleware(
 class CreateJobRequest(BaseModel):
     url: str
     max_steps: Optional[int] = 50
-    github_repo: Optional[str] = None    # e.g. "owner/repo" or full URL
-    github_token: Optional[str] = None  # PAT — used in-memory only, never persisted
+    github_repo: Optional[str] = None         # e.g. "owner/repo" or full URL
+    github_token: Optional[str] = None        # PAT — used in-memory only, never persisted
+    github_session_id: Optional[str] = None   # OAuth session — token resolved server-side
 
 
 class ProvideCredsRequest(BaseModel):
@@ -123,11 +126,18 @@ async def create_job(request: Request, body: CreateJobRequest):
 
     max_steps = None if not body.max_steps else max(1, body.max_steps)
 
+    # Resolve GitHub token: prefer OAuth session over raw PAT
+    github_token: str | None = body.github_token or None
+    if body.github_session_id:
+        oauth_token = get_token_for_session(body.github_session_id)
+        if oauth_token:
+            github_token = oauth_token
+
     job_id = manager.create(
         url=body.url,
         max_steps=max_steps,
         github_repo=body.github_repo or None,
-        github_token=body.github_token or None,
+        github_token=github_token,
     )
     return CreateJobResponse(job_id=job_id)
 

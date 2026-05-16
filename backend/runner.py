@@ -94,9 +94,11 @@ async def run_job(
                 from code_analyzer.env_detector import detect_env_vars
                 from code_analyzer.vector_store import CodeVectorStore
 
-                # Fetch code — token used here, then discarded
-                manager.update(job_id, current_action="Downloading repository files…")
-                repo_files = await asyncio.get_event_loop().run_in_executor(
+                loop = asyncio.get_running_loop()
+
+                # Fetch code as a single zipball — token used here, then discarded
+                manager.update(job_id, current_action="Downloading repository (zipball)…")
+                repo_files = await loop.run_in_executor(
                     None, lambda: fetch_repo(github_repo, github_token)
                 )
                 # Discard token from local scope immediately after use
@@ -104,16 +106,19 @@ async def run_job(
 
                 manager.update(job_id, current_action=f"Indexing {len(repo_files)} files…")
 
-                # Build vector store in job dir (stays on user's machine)
+                # Build vector store in job dir (stays on user's machine).
+                # Construction runs in executor so ChromaDB model loading
+                # doesn't block the event loop.
                 vs_dir = job_dir / "vector_store"
-                vector_store = CodeVectorStore(vs_dir)
-                await asyncio.get_event_loop().run_in_executor(
-                    None, vector_store.add_files, repo_files
-                )
+                def _build_vector_store():
+                    vs = CodeVectorStore(vs_dir)
+                    vs.add_files(repo_files)
+                    return vs
+                vector_store = await loop.run_in_executor(None, _build_vector_store)
 
                 # Static route + env-var extraction (CPU-only, no LLM)
-                code_routes = extract_routes(repo_files)
-                code_env_vars = detect_env_vars(repo_files)
+                code_routes = await loop.run_in_executor(None, extract_routes, repo_files)
+                code_env_vars = await loop.run_in_executor(None, detect_env_vars, repo_files)
 
                 manager.update(
                     job_id,
@@ -239,15 +244,17 @@ async def run_job(
         manager.update(job_id, status=Status.ANALYZING, current_action="Analyzing captured API calls…")
         manager.emit(job_id, {"type": "stage_change", "stage": Status.ANALYZING})
 
+        loop = asyncio.get_running_loop()
+
         if code_routes and vector_store:
             # Code-aware analysis: merge browser trace with static code analysis
             manager.update(job_id, current_action="Merging browser trace with code analysis…")
             from code_analyzer.merge import merge_analysis
 
-            browser_spec = await asyncio.get_event_loop().run_in_executor(
+            browser_spec = await loop.run_in_executor(
                 None, analyze, trace_dir / "trace.json", None
             )
-            spec = await asyncio.get_event_loop().run_in_executor(
+            spec = await loop.run_in_executor(
                 None,
                 lambda: merge_analysis(
                     browser_spec=browser_spec,
@@ -260,7 +267,7 @@ async def run_job(
             (job_dir / "feature_spec.json").write_text(json.dumps(spec, indent=2))
         else:
             # Browser-only analysis (original path)
-            spec = await asyncio.get_event_loop().run_in_executor(
+            spec = await loop.run_in_executor(
                 None, analyze, trace_dir / "trace.json", job_dir / "feature_spec.json"
             )
 
@@ -283,7 +290,7 @@ async def run_job(
             except Exception:
                 pass
 
-        await asyncio.get_event_loop().run_in_executor(
+        await loop.run_in_executor(
             None, generate, spec, job_dir / "mcp_server", user_env
         )
 

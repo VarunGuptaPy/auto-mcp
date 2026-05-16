@@ -18,28 +18,44 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from code_analyzer.github_fetcher import RepoFile
 
-CHUNK_CHARS = 600      # ~150 tokens
+CHUNK_CHARS = 600
 CHUNK_OVERLAP = 100
+MAX_CHUNKS = 5000  # cap to prevent runaway memory usage
 
 
 # --------------------------------------------------------------------------- #
-# Text chunking
+# Text chunking — fixed to guarantee forward progress on every iteration
 # --------------------------------------------------------------------------- #
 
 def _chunk(text: str, size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Split text into overlapping chunks of at most `size` characters."""
+    if not text:
+        return []
     chunks: list[str] = []
     start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        # Prefer to break at a newline boundary
-        if end < len(text):
+    n = len(text)
+    while start < n:
+        end = min(start + size, n)
+        # Prefer to break at a newline boundary within the window
+        if end < n:
             nl = text.rfind("\n", start, end)
             if nl > start:
                 end = nl + 1
+
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
-        start = end - overlap
+            if len(chunks) >= MAX_CHUNKS:
+                break
+
+        # ---- guarantee forward progress ----
+        if end >= n:
+            break  # consumed the entire text
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = end  # never go backwards
+        start = next_start
+
     return chunks
 
 
@@ -77,7 +93,7 @@ class _BM25Store:
     def add(self, docs: list[str]) -> None:
         self._docs.extend(docs)
         self._tokenized.extend(re.findall(r"\w+", d.lower()) for d in docs)
-        self._bm25 = None   # invalidate
+        self._bm25 = None  # invalidate cached model
 
     def query(self, text: str, n: int) -> list[str]:
         if not self._docs:
@@ -85,7 +101,7 @@ class _BM25Store:
         try:
             from rank_bm25 import BM25Okapi
         except ImportError:
-            # Last-resort: substring match
+            # Last-resort: simple substring frequency match
             q = text.lower()
             scored = sorted(self._docs, key=lambda d: -d.lower().count(q[:20]))
             return scored[:n]
@@ -124,7 +140,9 @@ class CodeVectorStore:
         for f in files:
             for i, chunk in enumerate(_chunk(f.content)):
                 doc = f"# {f.path}\n{chunk}"
-                chunk_id = hashlib.md5(f"{f.path}:{i}:{chunk[:40]}".encode()).hexdigest()
+                chunk_id = hashlib.md5(
+                    f"{f.path}:{i}:{chunk[:40]}".encode()
+                ).hexdigest()
                 docs.append(doc)
                 ids.append(chunk_id)
                 metas.append({"path": f.path, "lang": f.language})
@@ -137,9 +155,9 @@ class CodeVectorStore:
             for i in range(0, len(docs), batch):
                 try:
                     self._col.upsert(
-                        documents=docs[i:i + batch],
-                        metadatas=metas[i:i + batch],
-                        ids=ids[i:i + batch],
+                        documents=docs[i : i + batch],
+                        metadatas=metas[i : i + batch],
+                        ids=ids[i : i + batch],
                     )
                 except Exception:
                     self._use_chroma = False

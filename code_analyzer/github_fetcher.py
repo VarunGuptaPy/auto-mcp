@@ -1,6 +1,9 @@
 """
 Fetches repository source files via the GitHub REST API.
 
+Uses the zipball endpoint (single request) rather than individual blob
+fetches — this is orders-of-magnitude faster for repos with many files.
+
 Security properties:
   - The token is used only in-memory during the HTTP requests.
   - It is never written to disk or logged.
@@ -9,8 +12,9 @@ Security properties:
 
 from __future__ import annotations
 
-import base64
+import io
 import re
+import zipfile
 from dataclasses import dataclass
 
 import httpx
@@ -18,6 +22,7 @@ import httpx
 GITHUB_API = "https://api.github.com"
 MAX_FILE_BYTES = 150_000   # skip files larger than this
 MAX_FILES = 300            # cap to avoid enormous repos
+DOWNLOAD_TIMEOUT = 120.0   # seconds — generous for large private repos
 
 
 @dataclass
@@ -101,12 +106,15 @@ def fetch_repo(repo_url: str, token: str | None = None) -> list[RepoFile]:
     """
     Return a list of source-code files from a GitHub repository.
 
+    Downloads the entire repo as a single zipball (one HTTP request) rather
+    than fetching blobs individually, which is dramatically faster.
+
     Parameters
     ----------
     repo_url : str
         Full URL (https://github.com/user/repo) or short form (user/repo).
     token : str or None
-        GitHub Personal Access Token. Used only in-memory; never persisted.
+        GitHub Personal Access Token or OAuth token. Used only in-memory.
     """
     repo_id = _parse_repo_id(repo_url)
 
@@ -116,47 +124,58 @@ def fetch_repo(repo_url: str, token: str | None = None) -> list[RepoFile]:
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
-        # Note: token is referenced only here; caller should del their reference after return.
 
-    with httpx.Client(headers=headers, timeout=30.0) as client:
-        # Resolve default branch
+    with httpx.Client(
+        headers=headers,
+        timeout=DOWNLOAD_TIMEOUT,
+        follow_redirects=True,
+    ) as client:
+        # Resolve default branch so we know which ref to download
         repo_info = client.get(f"{GITHUB_API}/repos/{repo_id}")
         repo_info.raise_for_status()
         default_branch = repo_info.json().get("default_branch", "main")
 
-        # Full recursive tree — single API call
-        tree_resp = client.get(
-            f"{GITHUB_API}/repos/{repo_id}/git/trees/{default_branch}",
-            params={"recursive": "1"},
+        # Download the whole repo as a zipball — single request
+        zip_resp = client.get(
+            f"{GITHUB_API}/repos/{repo_id}/zipball/{default_branch}",
         )
-        tree_resp.raise_for_status()
-        tree = tree_resp.json().get("tree", [])
+        zip_resp.raise_for_status()
 
-        # Filter to code files within size budget
-        candidates = [
-            item for item in tree
-            if item["type"] == "blob"
-            and item.get("size", 0) < MAX_FILE_BYTES
-            and _is_code_file(item["path"])
-        ][:MAX_FILES]
+    # Parse zip in-memory — no temp files written to disk
+    buf = io.BytesIO(zip_resp.content)
+    results: list[RepoFile] = []
 
-        results: list[RepoFile] = []
-        for item in candidates:
+    with zipfile.ZipFile(buf) as zf:
+        names = zf.namelist()
+        # The top-level dir in GitHub zips is "<owner>-<repo>-<sha>/"
+        # Strip it so paths are relative to the repo root.
+        prefix = names[0].split("/")[0] + "/" if names else ""
+
+        for name in names:
+            if name.endswith("/"):
+                continue  # directory entry
+
+            rel = name[len(prefix):] if name.startswith(prefix) else name
+            if not rel or not _is_code_file(rel):
+                continue
+
+            info = zf.getinfo(name)
+            if info.file_size > MAX_FILE_BYTES:
+                continue
+
             try:
-                blob = client.get(f"{GITHUB_API}/repos/{repo_id}/git/blobs/{item['sha']}")
-                blob.raise_for_status()
-                data = blob.json()
-                if data.get("encoding") == "base64":
-                    raw = base64.b64decode(data["content"].replace("\n", ""))
-                    content = raw.decode("utf-8", errors="replace")
-                else:
-                    content = data.get("content", "")
-                results.append(RepoFile(
-                    path=item["path"],
-                    content=content,
-                    language=_detect_language(item["path"]),
-                ))
+                raw = zf.read(name)
+                content = raw.decode("utf-8", errors="replace")
             except Exception:
-                pass  # silently skip unreadable files
+                continue
+
+            results.append(RepoFile(
+                path=rel,
+                content=content,
+                language=_detect_language(rel),
+            ))
+
+            if len(results) >= MAX_FILES:
+                break
 
     return results

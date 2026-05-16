@@ -28,7 +28,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 import os
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from playwright.async_api import async_playwright, Page, Request, Response
 
 
@@ -466,7 +466,7 @@ async def explore(
     shots_dir = out_dir / "screenshots"
     shots_dir.mkdir(exist_ok=True)
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
         base_url=_DEEPSEEK_BASE_URL,
     )
@@ -531,7 +531,7 @@ async def explore(
             )
             text_block = next((p for p in text_parts if p.get("type") == "text"), {})
 
-            resp = client.chat.completions.create(
+            resp = await client.chat.completions.create(
                 model=MODEL,
                 max_tokens=500,
                 messages=[
