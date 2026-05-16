@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/backend /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/frontend/src /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/tests /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/runs)",
+      "Bash(touch /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/runs/.gitkeep)",
+      "Bash(pip install *)",
+      "Bash(PYTHONPATH=. pytest *)",
+      "Bash(python *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(playwright install *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/jobs -H \"Content-Type: application/json\" -d '{\"url\":\"https://news.ycombinator.com\",\"max_steps\":30}')",
+      "Bash(curl *)",
+      "Bash(kill %1)",
+      "Bash(pip show *)",
+      "Bash(/Users/varungupta/anaconda3/bin/pip install *)",
+      "Bash(npx tsc *)",
+      "Bash(kill 18792)",
+      "Bash(DEEPSEEK_API_KEY=sk-100ffb6d5e154901bebf48c6fa167f27 python -m uvicorn backend.main:app --port 8000 --log-level debug)"
+    ]
+  }
+}

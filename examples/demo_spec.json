@@ -1,0 +1,57 @@
+{
+  "product_name": "demo-blog",
+  "base_url": "https://api.demo-blog.example",
+  "auth": {
+    "type": "bearer",
+    "notes": "Requires a personal access token. Set MCP_AUTH_TOKEN."
+  },
+  "features": [
+    {
+      "id": "list_posts",
+      "name": "List blog posts",
+      "description": "Get a paginated list of all blog posts.",
+      "endpoint": {
+        "method": "GET",
+        "url_template": "https://api.demo-blog.example/v1/posts",
+        "query_params": [
+          {"name": "page", "type": "integer", "required": false},
+          {"name": "tag", "type": "string", "required": false}
+        ],
+        "body_schema": null
+      },
+      "returns": "JSON array of post objects with id, title, excerpt, author."
+    },
+    {
+      "id": "get_post",
+      "name": "Get a single post",
+      "description": "Fetch the full content of a specific post by ID.",
+      "endpoint": {
+        "method": "GET",
+        "url_template": "https://api.demo-blog.example/v1/posts/{id}",
+        "query_params": [],
+        "body_schema": null
+      },
+      "returns": "JSON object with full post including body markdown."
+    },
+    {
+      "id": "create_post",
+      "name": "Create a new post",
+      "description": "Publish a new blog post.",
+      "endpoint": {
+        "method": "POST",
+        "url_template": "https://api.demo-blog.example/v1/posts",
+        "query_params": [],
+        "body_schema": {
+          "type": "object",
+          "required": ["title", "body"],
+          "properties": {
+            "title": {"type": "string"},
+            "body": {"type": "string"},
+            "tags": {"type": "array"}
+          }
+        }
+      },
+      "returns": "JSON object with the newly created post."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+# Engine deps (already required by the CLI)
+openai>=1.35.0
+playwright>=1.44.0
+httpx>=0.27.0
+mcp>=1.0.0
+
+# Web app deps
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+slowapi>=0.1.9
+pydantic>=2.0.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
+
+# Code analysis — GitHub repo + vector search
+chromadb>=0.5.0          # local vector DB (downloads onnx model on first run)
+rank-bm25>=0.2.2         # fallback keyword search if chromadb unavailable
+
+# Test deps
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
