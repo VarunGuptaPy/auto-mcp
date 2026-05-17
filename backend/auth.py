@@ -3,19 +3,30 @@ GitHub OAuth flow for accessing private repositories.
 
 Session lifecycle:
   1. Frontend calls GET /api/auth/github/start?session_id=<id>
+     → backend generates a server-side state token, maps it to session_id
      → returns { authorize_url } (frontend opens popup to that URL)
-  2. GitHub redirects popup to GET /api/auth/github/callback?code=...&state=<session_id>
-     → backend exchanges code for token, stores in memory, returns close-popup HTML
+  2. GitHub redirects popup to GET /api/auth/github/callback?code=...&state=<server_state>
+     → backend validates server-generated state (CSRF protection), exchanges code for token
+     → stores token under session_id, returns close-popup HTML
   3. Popup postMessages success to opener; frontend calls GET /api/auth/github/me?session_id=<id>
      → returns { login, avatar_url, name }
   4. On job submit, frontend sends github_session_id; backend resolves token with get_token_for_session()
 
 Tokens are stored only in-memory (_oauth_sessions dict) and never written to disk.
+
+Security:
+  - OAuth `state` is server-generated (secrets.token_urlsafe), not client-controlled (CSRF prevention)
+  - Pending states expire after 10 minutes
+  - In-memory dicts are capped to prevent unbounded growth (DoS prevention)
+  - Error messages HTML-escaped before being reflected in responses
 """
 
 from __future__ import annotations
 
+import html
 import os
+import secrets
+import time
 from urllib.parse import urlencode
 
 import httpx
@@ -31,9 +42,21 @@ GITHUB_REDIRECT_URI = os.environ.get(
 )
 GITHUB_SCOPE = "repo"
 
-# In-memory stores — never persisted to disk
-_pending_sessions: set[str] = set()  # session_ids awaiting OAuth callback
-_oauth_sessions: dict[str, str] = {}  # session_id → access_token
+_STATE_TTL_SECONDS = 600   # 10 minutes
+_MAX_PENDING       = 500   # cap to prevent memory DoS
+
+# server_state → (session_id, expiry_timestamp)
+_pending_states: dict[str, tuple[str, float]] = {}
+# session_id → access_token (never written to disk)
+_oauth_sessions: dict[str, str] = {}
+
+
+def _purge_expired_states() -> None:
+    """Remove states older than TTL. Called before any write."""
+    now = time.monotonic()
+    expired = [k for k, (_, exp) in _pending_states.items() if now > exp]
+    for k in expired:
+        del _pending_states[k]
 
 
 def oauth_enabled() -> bool:
@@ -54,20 +77,29 @@ async def github_config():
 async def github_start(session_id: str):
     """
     Return the GitHub OAuth authorize URL.
-    The frontend opens a popup to this URL; session_id is threaded through
-    as the OAuth `state` parameter so we can correlate the callback.
+    Generates a cryptographically secure server-side state token (CSRF prevention).
+    The client-supplied session_id is stored server-side; GitHub never sees it.
     """
     if not oauth_enabled():
         raise HTTPException(
             status_code=503,
             detail="GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
         )
-    _pending_sessions.add(session_id)
+
+    _purge_expired_states()
+
+    if len(_pending_states) >= _MAX_PENDING:
+        raise HTTPException(status_code=429, detail="Too many pending OAuth sessions. Try again later.")
+
+    # Server-generated state — client cannot influence this value
+    server_state = secrets.token_urlsafe(32)
+    _pending_states[server_state] = (session_id, time.monotonic() + _STATE_TTL_SECONDS)
+
     params = urlencode(
         {
             "client_id": GITHUB_CLIENT_ID,
             "scope": GITHUB_SCOPE,
-            "state": session_id,
+            "state": server_state,
             "redirect_uri": GITHUB_REDIRECT_URI,
         }
     )
@@ -80,9 +112,15 @@ async def github_callback(code: str, state: str):
     Exchange the OAuth code for an access token.
     Returns an HTML page that postMessages success to the opener and closes itself.
     """
-    if state not in _pending_sessions:
-        raise HTTPException(status_code=400, detail="Invalid OAuth state. Please try again.")
-    _pending_sessions.discard(state)
+    _purge_expired_states()
+
+    entry = _pending_states.pop(state, None)
+    if entry is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state. Please try again.")
+
+    session_id, expiry = entry
+    if time.monotonic() > expiry:
+        raise HTTPException(status_code=400, detail="OAuth session expired. Please try again.")
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -99,16 +137,21 @@ async def github_callback(code: str, state: str):
     data = resp.json()
     token = data.get("access_token")
     if not token:
-        err = data.get("error_description") or data.get("error") or "Unknown error"
+        raw_err = data.get("error_description") or data.get("error") or "Unknown error"
+        safe_err = html.escape(str(raw_err))
         return HTMLResponse(
             f"""<html><body style="font-family:sans-serif;padding:2rem">
-            <p style="color:red">GitHub OAuth failed: {err}</p>
+            <p style="color:red">GitHub OAuth failed: {safe_err}</p>
             <p>You can close this window and try again.</p>
             </body></html>""",
             status_code=400,
         )
 
-    _oauth_sessions[state] = token
+    _oauth_sessions[session_id] = token
+
+    # session_id is a client-supplied opaque string; JSON-encode it so it's safe in JS
+    import json as _json
+    safe_session_id = _json.dumps(session_id)
 
     return HTMLResponse(f"""<!DOCTYPE html>
 <html>
@@ -118,7 +161,7 @@ async def github_callback(code: str, state: str):
   <script>
     try {{
       window.opener && window.opener.postMessage(
-        {{ type: 'github_oauth_success', sessionId: {state!r} }},
+        {{ type: 'github_oauth_success', sessionId: {safe_session_id} }},
         window.location.origin
       );
     }} catch (e) {{}}

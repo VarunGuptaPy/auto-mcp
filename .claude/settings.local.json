@@ -28,7 +28,9 @@
       "Bash(/Library/Frameworks/Python.framework/Versions/3.11/bin/pip3 show *)",
       "Bash(pip list *)",
       "Bash(python3 -m py_compile code_analyzer/vector_store.py code_analyzer/github_fetcher.py code_analyzer/route_extractor.py code_analyzer/env_detector.py code_analyzer/merge.py backend/runner.py backend/main.py backend/auth.py backend/jobs.py explorer/agent.py generator/generate.py)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(grep \"^\\\\.env$\" /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/.gitignore)",
+      "Bash(git *)"
     ]
   }
 }

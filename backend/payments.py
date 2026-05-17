@@ -95,16 +95,19 @@ async def create_checkout(req: CheckoutRequest):
 async def payment_webhook(request: Request):
     body = await request.body()
 
-    # Verify webhook signature when secret is configured
-    if DODO_WEBHOOK_SECRET:
-        signature = request.headers.get("webhook-signature") or request.headers.get("x-dodo-signature", "")
-        expected  = hmac.new(
-            DODO_WEBHOOK_SECRET.encode(),
-            body,
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            raise HTTPException(401, "Invalid webhook signature")
+    # DODO_WEBHOOK_SECRET is mandatory — reject all webhooks if not configured.
+    # Allowing unverified webhooks would let anyone forge subscription upgrades.
+    if not DODO_WEBHOOK_SECRET:
+        raise HTTPException(503, "Webhook secret not configured — set DODO_WEBHOOK_SECRET in .env")
+
+    signature = request.headers.get("webhook-signature") or request.headers.get("x-dodo-signature", "")
+    expected  = hmac.new(
+        DODO_WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise HTTPException(401, "Invalid webhook signature")
 
     try:
         event = json.loads(body)

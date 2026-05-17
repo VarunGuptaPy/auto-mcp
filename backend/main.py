@@ -1,22 +1,21 @@
 """
 FastAPI application — all HTTP routes.
 
-Startup:
-  - Creates the RUNS_DIR if absent.
-  - Starts the job-queue worker as a background task.
-  - Starts the cleanup background task.
-
-The API never echoes credentials, never leaks the Anthropic key, and all
-user-submitted URLs are passed through security.validate_url() before
-anything reaches the engine.
+Security hardening:
+  - CORS restricted to FRONTEND_ORIGIN env var (not wildcard)
+  - Security headers on every response (CSP, HSTS, nosniff, frame-deny)
+  - Job IDs validated as UUIDs before touching the filesystem
+  - File uploads: extension whitelist, UUID filename, 10 MB cap
+  - Rate-limited endpoints across the board, not just job creation
+  - Content-Disposition filename sanitized to alphanumeric + underscore only
+  - URL validated for length and SSRF before reaching the engine
 """
 
 import io
 import json
+import re
+import uuid
 
-# Load .env automatically so `uvicorn backend.main:app` works without
-# manually exporting env vars. Docker Compose passes them directly, so
-# this is a no-op in production.
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -29,6 +28,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -43,18 +43,44 @@ from backend.runner import run_job
 from backend.security import validate_url
 
 # --------------------------------------------------------------------------- #
+# Constants
+# --------------------------------------------------------------------------- #
+
+MAX_URL_LENGTH        = 2048
+MAX_UPLOAD_BYTES      = 10 * 1024 * 1024          # 10 MB
+MAX_SCREENSHOT_STEP   = 10_000
+ALLOWED_UPLOAD_EXTS   = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".txt", ".csv", ".json"}
+_UUID_RE              = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_SAFE_FILENAME_RE     = re.compile(r"[^a-z0-9_\-]")
+
+# --------------------------------------------------------------------------- #
 # Rate limiter
 # --------------------------------------------------------------------------- #
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
+# --------------------------------------------------------------------------- #
+# Security headers middleware
+# --------------------------------------------------------------------------- #
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"]    = "nosniff"
+        response.headers["X-Frame-Options"]           = "DENY"
+        response.headers["X-XSS-Protection"]          = "1; mode=block"
+        response.headers["Referrer-Policy"]           = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"]        = "geolocation=(), microphone=(), camera=()"
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+        # CSP: API only serves JSON/binary — no HTML pages need scripts
+        response.headers["Content-Security-Policy"]   = "default-src 'none'; frame-ancestors 'none'"
+        return response
 
 # --------------------------------------------------------------------------- #
 # FastAPI app + lifespan
 # --------------------------------------------------------------------------- #
 
 manager = JobManager()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -69,16 +95,37 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="auto-mcp", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+# Security headers on every response
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.include_router(auth_router)
 app.include_router(payments_router)
 
+# CORS — never wildcard in production
+_FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+_ALLOWED_ORIGINS = [o.strip() for o in _FRONTEND_ORIGIN.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    allow_credentials=False,
 )
 
+# --------------------------------------------------------------------------- #
+# Helpers
+# --------------------------------------------------------------------------- #
+
+def _require_valid_job_id(job_id: str) -> None:
+    """Reject non-UUID job_ids before they touch the filesystem."""
+    if not _UUID_RE.match(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID format.")
+
+def _safe_product_name(raw: str) -> str:
+    """Sanitize to alphanumeric + underscore, max 40 chars."""
+    return _SAFE_FILENAME_RE.sub("_", raw.lower())[:40] or "mcp_server"
 
 # --------------------------------------------------------------------------- #
 # Request / response models
@@ -87,9 +134,9 @@ app.add_middleware(
 class CreateJobRequest(BaseModel):
     url: str
     max_steps: Optional[int] = 50
-    github_repo: Optional[str] = None         # e.g. "owner/repo" or full URL
-    github_token: Optional[str] = None        # PAT — used in-memory only, never persisted
-    github_session_id: Optional[str] = None   # OAuth session — token resolved server-side
+    github_repo: Optional[str] = None
+    github_token: Optional[str] = None
+    github_session_id: Optional[str] = None
 
 
 class ProvideCredsRequest(BaseModel):
@@ -98,7 +145,8 @@ class ProvideCredsRequest(BaseModel):
 
 class ChatAnswerRequest(BaseModel):
     question_id: str
-    answer: Any  # str for text/choice, dict for credentials
+    answer: Any
+
 
 class UserMessageRequest(BaseModel):
     text: str
@@ -115,18 +163,17 @@ class CreateJobResponse(BaseModel):
 @app.post("/api/jobs", response_model=CreateJobResponse)
 @limiter.limit("1/5minutes")
 async def create_job(request: Request, body: CreateJobRequest):
-    """
-    Submit a URL for exploration.
+    """Submit a URL for exploration. Rate-limited, SSRF-validated."""
+    # 1 — URL length guard (before the more expensive DNS check)
+    if len(body.url) > MAX_URL_LENGTH:
+        raise HTTPException(status_code=400, detail=f"URL must be under {MAX_URL_LENGTH} characters.")
 
-    Rate-limited to 1 request per IP per 5 minutes to protect browser resources.
-    Validates the URL for SSRF before touching the engine.
-    """
     try:
         validate_url(body.url)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    max_steps = None if not body.max_steps else max(1, body.max_steps)
+    max_steps = None if not body.max_steps else max(1, min(body.max_steps, 500))
 
     # Resolve GitHub token: prefer OAuth session over raw PAT
     github_token: str | None = body.github_token or None
@@ -145,8 +192,10 @@ async def create_job(request: Request, body: CreateJobRequest):
 
 
 @app.post("/api/jobs/{job_id}/credentials")
-async def provide_credentials(job_id: str, body: ProvideCredsRequest):
-    """Backwards-compat: submit login credentials. Prefer /chat."""
+@limiter.limit("20/minute")
+async def provide_credentials(request: Request, job_id: str, body: ProvideCredsRequest):
+    """Backwards-compat: submit login credentials."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
@@ -157,32 +206,61 @@ async def provide_credentials(job_id: str, body: ProvideCredsRequest):
 
 
 @app.post("/api/jobs/{job_id}/upload")
-async def upload_file_for_job(job_id: str, file: UploadFile = File(...)):
-    """Accept a user-supplied file (image, PDF, etc.) and save it under the job directory."""
+@limiter.limit("10/minute")
+async def upload_file_for_job(request: Request, job_id: str, file: UploadFile = File(...)):
+    """Accept a user-supplied file and save it under the job directory."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
+
+    # Extension whitelist
+    original = Path(file.filename or "upload")
+    ext = original.suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{ext}' is not allowed. Permitted: {', '.join(sorted(ALLOWED_UPLOAD_EXTS))}",
+        )
+
+    # Read with size cap
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)} MB limit.")
+
+    # Use UUID-based filename — never trust user-supplied name
+    safe_name = f"{uuid.uuid4().hex}{ext}"
     upload_dir = RUNS_DIR / job_id / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    safe_name = Path(file.filename or "upload").name
     dest = upload_dir / safe_name
-    dest.write_bytes(await file.read())
-    return {"path": str(dest.resolve())}
+    dest.write_bytes(data)
+
+    # Return a relative path, not the full filesystem path
+    return {"path": f"uploads/{safe_name}"}
 
 
 @app.post("/api/jobs/{job_id}/message")
-async def send_user_message(job_id: str, body: UserMessageRequest):
+@limiter.limit("30/minute")
+async def send_user_message(request: Request, job_id: str, body: UserMessageRequest):
     """Send a free-form instruction to the agent mid-run."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
+
+    # Cap message length to prevent abuse
+    if len(body.text) > 4096:
+        raise HTTPException(status_code=400, detail="Message too long (max 4096 chars).")
+
     manager.add_user_message(job_id, body.text)
     return {"ok": True}
 
 
 @app.post("/api/jobs/{job_id}/chat")
-async def chat_answer(job_id: str, body: ChatAnswerRequest):
-    """Submit an answer to an agent question (auth, text, or choice)."""
+@limiter.limit("30/minute")
+async def chat_answer(request: Request, job_id: str, body: ChatAnswerRequest):
+    """Submit an answer to an agent question."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
@@ -193,8 +271,10 @@ async def chat_answer(job_id: str, body: ChatAnswerRequest):
 
 
 @app.get("/api/jobs/{job_id}")
-async def get_job(job_id: str):
+@limiter.limit("60/minute")
+async def get_job(request: Request, job_id: str):
     """Return current job status and progress counters."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
@@ -203,21 +283,22 @@ async def get_job(job_id: str):
 
 @app.get("/api/jobs/{job_id}/events")
 async def job_events(job_id: str, request: Request):
-    """
-    Server-Sent Events stream of live job progress.
-    Reconnecting clients receive a replay of past events automatically.
-    """
+    """SSE stream of live job progress."""
+    _require_valid_job_id(job_id)
     job = manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
-
     generator = sse_generator(job_id, manager, request)
     return make_sse_response(generator)
 
 
 @app.get("/api/jobs/{job_id}/screenshot/{step}")
-async def get_screenshot(job_id: str, step: int):
+@limiter.limit("120/minute")
+async def get_screenshot(request: Request, job_id: str, step: int):
     """Serve a screenshot PNG for a given step number."""
+    _require_valid_job_id(job_id)
+    if not (0 <= step <= MAX_SCREENSHOT_STEP):
+        raise HTTPException(status_code=400, detail="Step number out of range.")
     path = RUNS_DIR / job_id / "trace" / "screenshots" / f"step_{step:03d}.png"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Screenshot not found.")
@@ -225,8 +306,10 @@ async def get_screenshot(job_id: str, step: int):
 
 
 @app.get("/api/jobs/{job_id}/spec")
-async def get_spec(job_id: str):
+@limiter.limit("30/minute")
+async def get_spec(request: Request, job_id: str):
     """Return the feature_spec.json produced by the analyzer."""
+    _require_valid_job_id(job_id)
     spec_path = RUNS_DIR / job_id / "feature_spec.json"
     if not spec_path.exists():
         raise HTTPException(status_code=404, detail="Spec not ready yet.")
@@ -234,8 +317,10 @@ async def get_spec(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/download")
-async def download_mcp(job_id: str):
+@limiter.limit("10/minute")
+async def download_mcp(request: Request, job_id: str):
     """Return a .zip of the generated MCP server directory."""
+    _require_valid_job_id(job_id)
     server_dir = RUNS_DIR / job_id / "mcp_server"
     if not server_dir.exists():
         raise HTTPException(status_code=404, detail="MCP server not generated yet.")
@@ -244,25 +329,27 @@ async def download_mcp(job_id: str):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for fpath in sorted(server_dir.rglob("*")):
             if fpath.is_file():
-                zf.write(fpath, fpath.relative_to(server_dir))
+                # Prevent zip-slip: ensure path stays inside server_dir
+                rel = fpath.relative_to(server_dir)
+                if ".." in rel.parts:
+                    continue
+                zf.write(fpath, rel)
     buf.seek(0)
 
-    job = manager.get(job_id)
     product = "mcp_server"
-    if job:
-        spec_path = RUNS_DIR / job_id / "feature_spec.json"
-        if spec_path.exists():
-            try:
-                spec = json.loads(spec_path.read_text())
-                raw_name = spec.get("product_name", "mcp_server")
-                product = raw_name.lower().replace(" ", "_")[:40]
-            except Exception:
-                pass
+    spec_path = RUNS_DIR / job_id / "feature_spec.json"
+    if spec_path.exists():
+        try:
+            raw_name = json.loads(spec_path.read_text()).get("product_name", "mcp_server")
+            product = _safe_product_name(raw_name)
+        except Exception:
+            pass
 
+    safe_filename = f"{product}.zip"
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{product}.zip"'},
+        headers={"Content-Disposition": f"attachment; filename=\"{safe_filename}\""},
     )
 
 
@@ -273,9 +360,3 @@ async def download_mcp(job_id: str):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "active_jobs": manager.active_count(), "queued": manager.queue_size()}
-
-
-# --------------------------------------------------------------------------- #
-# Frontend is served by Next.js (separate service).
-# The API is the only thing FastAPI serves; no SPA catch-all needed.
-# --------------------------------------------------------------------------- #
