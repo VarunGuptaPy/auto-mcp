@@ -2,14 +2,98 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/lib/auth-context";
 
+/* ─── Scroll reveal ─────────────────────────────────────────── */
+
+function useScrollReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll("[data-reveal]");
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-visible");
+            io.unobserve(e.target);
+          }
+        }),
+      { threshold: 0.1 }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+}
+
+/* ─── 3-D card tilt ─────────────────────────────────────────── */
+
+function useTilt() {
+  useEffect(() => {
+    const cards = document.querySelectorAll<HTMLElement>("[data-tilt]");
+
+    function onMove(this: HTMLElement, e: Event) {
+      const me = e as MouseEvent;
+      const rect = this.getBoundingClientRect();
+      const x = (me.clientX - rect.left) / rect.width - 0.5;
+      const y = (me.clientY - rect.top) / rect.height - 0.5;
+      this.style.transform = `perspective(800px) rotateY(${x * 9}deg) rotateX(${-y * 9}deg) scale(1.025)`;
+    }
+    function onLeave(this: HTMLElement) {
+      this.style.transform = "";
+    }
+
+    cards.forEach((c) => {
+      c.addEventListener("mousemove", onMove);
+      c.addEventListener("mouseleave", onLeave);
+    });
+    return () => {
+      cards.forEach((c) => {
+        c.removeEventListener("mousemove", onMove);
+        c.removeEventListener("mouseleave", onLeave);
+      });
+    };
+  }, []);
+}
+
+/* ─── Typewriter ────────────────────────────────────────────── */
+
+function Typewriter({ text, startDelay = 600 }: { text: string; startDelay?: number }) {
+  const [shown, setShown] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const id = setInterval(() => {
+        setShown((n) => {
+          if (n >= text.length) {
+            clearInterval(id);
+            setTimeout(() => setDone(true), 1400);
+            return n;
+          }
+          return n + 1;
+        });
+      }, 65);
+      return () => clearInterval(id);
+    }, startDelay);
+    return () => clearTimeout(t);
+  }, [text, startDelay]);
+
+  return (
+    <>
+      {text.slice(0, shown)}
+      {!done && <span className="cursor-blink inline-block w-[3px] ml-0.5 align-middle" style={{ height: "0.85em", background: "currentColor" }} />}
+    </>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════ */
 
 export default function LandingPage() {
+  useScrollReveal();
+  useTilt();
+
   return (
     <div className="flex flex-col min-h-screen overflow-x-hidden">
       <Navbar />
@@ -33,6 +117,38 @@ function Hero() {
   const { user } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const heroRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  /* Smooth lerped mouse parallax */
+  useEffect(() => {
+    const hero = heroRef.current;
+    const content = contentRef.current;
+    if (!hero || !content) return;
+
+    let raf: number;
+    let tx = 0, ty = 0, cx = 0, cy = 0;
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    function onMove(e: MouseEvent) {
+      const r = hero!.getBoundingClientRect();
+      tx = (e.clientX - r.left - r.width / 2) * 0.022;
+      ty = (e.clientY - r.top - r.height / 2) * 0.014;
+    }
+    function frame() {
+      cx = lerp(cx, tx, 0.07);
+      cy = lerp(cy, ty, 0.07);
+      content!.style.transform = `translate(${cx}px, ${cy}px)`;
+      raf = requestAnimationFrame(frame);
+    }
+
+    hero.addEventListener("mousemove", onMove);
+    raf = requestAnimationFrame(frame);
+    return () => {
+      hero.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   function go(e: React.FormEvent) {
     e.preventDefault();
@@ -41,31 +157,66 @@ function Hero() {
     router.push(`${dest}&url=${encodeURIComponent(url.trim())}`);
   }
 
+  const floatingDots = [
+    { x: "7%",  y: "22%", s: 8,  c: "rgba(157,143,255,0.45)", cls: "animate-float-slow",   d: "0s"   },
+    { x: "88%", y: "18%", s: 6,  c: "rgba(232,121,249,0.35)", cls: "animate-float-medium", d: "2s"   },
+    { x: "82%", y: "70%", s: 10, c: "rgba(157,143,255,0.25)", cls: "animate-float-slow",   d: "4s"   },
+    { x: "13%", y: "76%", s: 5,  c: "rgba(232,121,249,0.4)",  cls: "animate-float-medium", d: "1s"   },
+    { x: "47%", y: "7%",  s: 4,  c: "rgba(157,143,255,0.5)",  cls: "animate-float-fast",   d: "3s"   },
+    { x: "93%", y: "48%", s: 6,  c: "rgba(157,143,255,0.3)",  cls: "animate-float-fast",   d: "5s"   },
+    { x: "2%",  y: "52%", s: 4,  c: "rgba(232,121,249,0.25)", cls: "animate-float-slow",   d: "6s"   },
+    { x: "55%", y: "87%", s: 7,  c: "rgba(157,143,255,0.35)", cls: "animate-float-medium", d: "2.5s" },
+    { x: "30%", y: "12%", s: 3,  c: "rgba(232,121,249,0.3)",  cls: "animate-float-fast",   d: "7s"   },
+    { x: "70%", y: "85%", s: 5,  c: "rgba(157,143,255,0.2)",  cls: "animate-float-slow",   d: "3.5s" },
+  ];
+
   return (
-    <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 pt-10 pb-20 text-center overflow-hidden">
-      {/* Layered background */}
-      <div aria-hidden className="absolute inset-0 bg-hero-glow pointer-events-none" />
+    <section
+      ref={heroRef}
+      className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 pt-10 pb-20 text-center overflow-hidden"
+    >
+      {/* Dot grid */}
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none opacity-[0.35]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(157,143,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(157,143,255,0.05) 1px,transparent 1px)",
-          backgroundSize: "52px 52px",
-        }}
-      />
-      {/* Radial spotlight */}
-      <div
-        aria-hidden
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, rgba(157,143,255,0.18) 0%, rgba(232,121,249,0.06) 50%, transparent 70%)",
-          filter: "blur(40px)",
+            "radial-gradient(circle, rgba(157,143,255,0.2) 1px, transparent 1px)",
+          backgroundSize: "44px 44px",
         }}
       />
 
-      <div className="relative z-10 max-w-4xl mx-auto">
+      {/* Slowly rotating orbital rings */}
+      <div
+        aria-hidden
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
+      >
+        <div
+          className="w-[680px] h-[680px] rounded-full animate-spin-slow"
+          style={{ border: "1px solid rgba(157,143,255,0.07)" }}
+        />
+        <div
+          className="absolute inset-14 rounded-full animate-spin-slow-rev"
+          style={{ border: "1px solid rgba(232,121,249,0.05)" }}
+        />
+        <div
+          className="absolute inset-28 rounded-full animate-spin-slow"
+          style={{ border: "1px solid rgba(157,143,255,0.06)", animationDuration: "30s" }}
+        />
+      </div>
+
+      {/* Floating geometric dots */}
+      {floatingDots.map((d, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className={`absolute rounded-full pointer-events-none ${d.cls}`}
+          style={{ left: d.x, top: d.y, width: d.s, height: d.s, background: d.c, animationDelay: d.d }}
+        />
+      ))}
+
+      {/* Parallax content layer */}
+      <div ref={contentRef} className="relative z-10 max-w-4xl mx-auto" style={{ willChange: "transform" }}>
         {/* Eyebrow badge */}
         <div className="animate-fade-in inline-flex items-center gap-2.5 mb-7 px-3.5 py-1.5 rounded-full border border-accent/25 bg-accent/10 text-xs font-medium">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
@@ -78,7 +229,9 @@ function Hero() {
         <h1 className="animate-fade-in-d1 text-[clamp(2.6rem,7vw,5.5rem)] font-extrabold tracking-tight leading-[1.04] mb-6">
           <span className="text-text1">Every website</span>
           <br />
-          <span className="text-gradient-accent">is an API.</span>
+          <span className="text-gradient-accent">
+            <Typewriter text="is an API." startDelay={700} />
+          </span>
           <br />
           <span className="text-text1">Now your AI knows it.</span>
         </h1>
@@ -104,11 +257,7 @@ function Hero() {
           />
           <button
             type="submit"
-            className="px-6 py-3 rounded-xl font-semibold text-sm text-white whitespace-nowrap transition-all"
-            style={{
-              background: "linear-gradient(135deg, #9d8fff 0%, #c084fc 55%, #e879f9 100%)",
-              boxShadow: "0 0 24px rgba(157,143,255,0.35)",
-            }}
+            className="btn-primary px-6 py-3 rounded-xl text-sm whitespace-nowrap"
           >
             Generate MCP →
           </button>
@@ -133,6 +282,7 @@ function CompatStrip() {
 
   return (
     <div className="relative border-y border-border py-4 overflow-hidden">
+      {/* Edge fades — functional mask for the marquee */}
       <div className="absolute inset-y-0 left-0 w-20 z-10 pointer-events-none"
         style={{ background: "linear-gradient(90deg, #08070e, transparent)" }} />
       <div className="absolute inset-y-0 right-0 w-20 z-10 pointer-events-none"
@@ -159,110 +309,94 @@ function CompatStrip() {
 function ProductPreview() {
   return (
     <section className="px-4 py-20">
-      <div className="max-w-5xl mx-auto">
-        <div className="relative">
-          {/* Glow behind the mockup */}
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse 70% 50% at 50% 60%, rgba(157,143,255,0.12) 0%, transparent 70%)",
-              filter: "blur(24px)",
-            }}
-          />
-
-          {/* Browser chrome */}
-          <div className="relative border-gradient rounded-2xl overflow-hidden" style={{ background: "#0f0d1a" }}>
-            {/* Title bar */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2/60">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-danger/50" />
-                <div className="w-3 h-3 rounded-full bg-warn/50" />
-                <div className="w-3 h-3 rounded-full bg-success/50" />
+      <div className="max-w-5xl mx-auto" data-reveal>
+        {/* Browser chrome */}
+        <div className="relative border-gradient rounded-2xl overflow-hidden" style={{ background: "#0f0d1a" }}>
+          {/* Title bar */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2/60">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-danger/50" />
+              <div className="w-3 h-3 rounded-full bg-warn/50" />
+              <div className="w-3 h-3 rounded-full bg-success/50" />
+            </div>
+            <div className="flex-1 flex justify-center">
+              <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-64">
+                <LockIcon />
+                auto-mcp.dev/jobs/f7a2c1
               </div>
-              <div className="flex-1 flex justify-center">
-                <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-64">
-                  <LockIcon />
-                  auto-mcp.dev/jobs/f7a2c1
+            </div>
+          </div>
+
+          {/* Fake app UI */}
+          <div className="grid grid-cols-[180px_1fr_280px] h-[380px] text-xs">
+            {/* Left: timeline */}
+            <div className="border-r border-border p-4 space-y-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted mb-4">Progress</p>
+              {[
+                { label: "Code analysis", done: true  },
+                { label: "Exploring",     done: true  },
+                { label: "Analyzing",     active: true },
+                { label: "Generating",    done: false },
+                { label: "Done",          done: false },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center gap-2.5">
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                    s.done   ? "bg-success/20 border border-success/40 text-success" :
+                    s.active ? "bg-accent/20 border border-accent/40 text-accent animate-pulse" :
+                               "bg-border border border-border text-muted"
+                  }`}>
+                    {s.done ? "✓" : s.active ? "●" : "○"}
+                  </div>
+                  <span className={s.done ? "text-text2" : s.active ? "text-text1" : "text-muted"}>
+                    {s.label}
+                  </span>
                 </div>
+              ))}
+
+              <div className="pt-4 border-t border-border">
+                <p className="text-2xl font-mono font-bold text-text1">1:42</p>
+                <p className="text-muted text-[10px]">elapsed</p>
               </div>
             </div>
 
-            {/* Fake app UI */}
-            <div className="grid grid-cols-[180px_1fr_280px] h-[380px] text-xs">
-              {/* Left: timeline */}
-              <div className="border-r border-border p-4 space-y-3">
-                <p className="text-[10px] uppercase tracking-wider text-muted mb-4">Progress</p>
-                {[
-                  { label: "Code analysis", done: true  },
-                  { label: "Exploring",     done: true  },
-                  { label: "Analyzing",     active: true },
-                  { label: "Generating",    done: false },
-                  { label: "Done",          done: false },
-                ].map((s) => (
-                  <div key={s.label} className="flex items-center gap-2.5">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
-                      s.done   ? "bg-success/20 border border-success/40 text-success" :
-                      s.active ? "bg-accent/20 border border-accent/40 text-accent animate-pulse" :
-                                 "bg-border border border-border text-muted"
-                    }`}>
-                      {s.done ? "✓" : s.active ? "●" : "○"}
-                    </div>
-                    <span className={s.done ? "text-text2" : s.active ? "text-text1" : "text-muted"}>
-                      {s.label}
-                    </span>
+            {/* Center: screenshot area */}
+            <div className="border-r border-border p-4 flex flex-col gap-3">
+              <div className="flex-1 bg-black/60 rounded-lg overflow-hidden relative">
+                <div className="absolute inset-0 flex flex-col">
+                  <div className="h-7 bg-[#1a1a2e] border-b border-border/50 flex items-center px-3 gap-2">
+                    <div className="w-16 h-2 bg-surface-2 rounded" />
+                    <div className="w-24 h-2 bg-surface-2 rounded" />
                   </div>
-                ))}
-
-                <div className="pt-4 border-t border-border">
-                  <p className="text-2xl font-mono font-bold text-text1">1:42</p>
-                  <p className="text-muted text-[10px]">elapsed</p>
+                  <div className="flex-1 p-3 space-y-2">
+                    {[70, 45, 90, 55, 80].map((w, i) => (
+                      <div key={i} className="h-2 rounded" style={{ width: `${w}%`, background: "#221f38" }} />
+                    ))}
+                  </div>
+                </div>
+                <div className="absolute top-2 right-2 text-[9px] font-mono bg-black/70 border border-border rounded px-1.5 py-0.5 text-text2">
+                  step 18/24
                 </div>
               </div>
 
-              {/* Center: screenshot area */}
-              <div className="border-r border-border p-4 flex flex-col gap-3">
-                {/* Fake screenshot */}
-                <div className="flex-1 bg-black/60 rounded-lg overflow-hidden relative">
-                  <div className="absolute inset-0 flex flex-col">
-                    <div className="h-7 bg-[#1a1a2e] border-b border-border/50 flex items-center px-3 gap-2">
-                      <div className="w-16 h-2 bg-surface-2 rounded" />
-                      <div className="w-24 h-2 bg-surface-2 rounded" />
-                    </div>
-                    <div className="flex-1 p-3 space-y-2">
-                      {[70, 45, 90, 55, 80].map((w, i) => (
-                        <div key={i} className="h-2 rounded" style={{ width: `${w}%`, background: "#221f38" }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="absolute top-2 right-2 text-[9px] font-mono bg-black/70 border border-border rounded px-1.5 py-0.5 text-text2">
-                    step 18/24
-                  </div>
-                </div>
-
-                {/* Reasoning box */}
-                <div className="bg-surface-2/60 border border-border rounded-lg p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-muted mb-1.5">Agent reasoning</p>
-                  <p className="text-[11px] text-text2 leading-relaxed line-clamp-2">
-                    Clicking &quot;View item&quot; button → navigating to /items/42 → capturing GET /api/items/42 endpoint with auth header
-                  </p>
-                </div>
-
-                {/* Endpoints */}
-                <div className="bg-surface-2/60 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-muted">Endpoints captured</span>
-                  <span className="text-accent font-mono font-bold text-sm">12</span>
-                </div>
+              <div className="bg-surface-2/60 border border-border rounded-lg p-3">
+                <p className="text-[9px] uppercase tracking-wider text-muted mb-1.5">Agent reasoning</p>
+                <p className="text-[11px] text-text2 leading-relaxed line-clamp-2">
+                  Clicking &quot;View item&quot; button → navigating to /items/42 → capturing GET /api/items/42 endpoint with auth header
+                </p>
               </div>
 
-              {/* Right: chat panel */}
-              <div className="p-4 flex flex-col gap-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted mb-1">Agent chat</p>
-                <AgentBubble text="I've explored 18 pages. Found a login wall at /dashboard. Do you want me to authenticate?" />
-                <UserBubble text="Yes, use test@example.com / password123" />
-                <AgentBubble text="Got it. Authenticated successfully. Continuing exploration…" />
+              <div className="bg-surface-2/60 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-muted">Endpoints captured</span>
+                <span className="text-accent font-mono font-bold text-sm">12</span>
               </div>
+            </div>
+
+            {/* Right: chat panel */}
+            <div className="p-4 flex flex-col gap-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted mb-1">Agent chat</p>
+              <AgentBubble text="I've explored 18 pages. Found a login wall at /dashboard. Do you want me to authenticate?" />
+              <UserBubble text="Yes, use test@example.com / password123" />
+              <AgentBubble text="Got it. Authenticated successfully. Continuing exploration…" />
             </div>
           </div>
         </div>
@@ -294,14 +428,16 @@ function HowItWorks() {
   return (
     <section id="how-it-works" className="py-24 px-4">
       <div className="max-w-5xl mx-auto">
-        <Label>How it works</Label>
-        <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center leading-tight mb-4">
-          Three steps.<br />
-          <span className="text-gradient-accent">One MCP server.</span>
-        </h2>
-        <p className="text-text2 text-center max-w-xl mx-auto mb-16">
-          No config files. No API docs to read. Just a URL.
-        </p>
+        <div data-reveal>
+          <Label>How it works</Label>
+          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center leading-tight mb-4">
+            Three steps.<br />
+            <span className="text-gradient-accent">One MCP server.</span>
+          </h2>
+          <p className="text-text2 text-center max-w-xl mx-auto mb-16">
+            No config files. No API docs to read. Just a URL.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
@@ -329,8 +465,10 @@ function HowItWorks() {
           ].map((s, i) => (
             <div
               key={s.n}
+              data-reveal
+              data-delay={String(i + 1) as "1" | "2" | "3"}
+              data-tilt
               className="border-gradient shine p-6 rounded-2xl relative"
-              style={{ animationDelay: `${i * 0.1}s` }}
             >
               <div className="flex items-center justify-between mb-5">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent"
@@ -358,17 +496,17 @@ function BentoFeatures() {
   return (
     <section className="py-6 px-4">
       <div className="max-w-5xl mx-auto">
-        <Label>Features</Label>
-        <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-14">
-          Built for depth,<br />
-          <span className="text-gradient-accent">not just breadth.</span>
-        </h2>
+        <div data-reveal>
+          <Label>Features</Label>
+          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-14">
+            Built for depth,<br />
+            <span className="text-gradient-accent">not just breadth.</span>
+          </h2>
+        </div>
 
-        {/* Bento grid — asymmetric */}
         <div className="grid grid-cols-1 md:grid-cols-5 grid-rows-[auto_auto] gap-4">
 
-          {/* Large left — code analysis */}
-          <div className="border-gradient shine rounded-2xl p-6 md:col-span-3">
+          <div data-reveal data-delay="1" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-3">
             <div className="flex items-center gap-3 mb-4">
               <BentoIcon><CodeIcon /></BentoIcon>
               <div>
@@ -390,8 +528,7 @@ function BentoFeatures() {
             </div>
           </div>
 
-          {/* Small right — privacy */}
-          <div className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="2" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
             <BentoIcon><LockIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Privacy-first</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -408,8 +545,7 @@ function BentoFeatures() {
             </div>
           </div>
 
-          {/* Bottom row */}
-          <div className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="1" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
             <BentoIcon><ZapIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Claude-ready output</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -419,7 +555,7 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="2" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
             <BentoIcon><ChatIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Interactive agent</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -429,7 +565,7 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div className="border-gradient shine rounded-2xl p-6 md:col-span-1 flex flex-col justify-between">
+          <div data-reveal data-delay="3" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-1 flex flex-col justify-between">
             <div>
               <BentoIcon><GlobeIcon /></BentoIcon>
               <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Any site</h3>
@@ -452,18 +588,20 @@ function Pricing() {
   return (
     <section id="pricing" className="py-24 px-4">
       <div className="max-w-4xl mx-auto">
-        <Label>Pricing</Label>
-        <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-3">
-          Start free.<br />
-          <span className="text-gradient-accent">Scale when you need to.</span>
-        </h2>
-        <p className="text-center text-text2 mb-14 max-w-sm mx-auto">
-          No contracts. No hidden fees. Cancel anytime.
-        </p>
+        <div data-reveal>
+          <Label>Pricing</Label>
+          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-3">
+            Start free.<br />
+            <span className="text-gradient-accent">Scale when you need to.</span>
+          </h2>
+          <p className="text-center text-text2 mb-14 max-w-sm mx-auto">
+            No contracts. No hidden fees. Cancel anytime.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Free */}
-          <div className="card p-7">
+          <div data-reveal data-delay="1" className="card p-7">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-5">Free</p>
             <div className="flex items-end gap-1.5 mb-1">
               <span className="text-5xl font-black text-text1">$0</span>
@@ -496,15 +634,19 @@ function Pricing() {
 
           {/* Pro */}
           <div
+            data-reveal
+            data-delay="2"
             className="relative rounded-2xl p-7"
             style={{
-              background: "linear-gradient(145deg, rgba(157,143,255,0.12) 0%, rgba(232,121,249,0.06) 100%)",
-              border: "1px solid rgba(157,143,255,0.3)",
-              boxShadow: "0 0 0 1px rgba(157,143,255,0.1), 0 0 60px rgba(157,143,255,0.1)",
+              background: "#0f0d1a",
+              border: "1px solid rgba(157,143,255,0.35)",
+              boxShadow: "0 0 0 1px rgba(157,143,255,0.08), 0 0 48px rgba(0,0,0,0.5)",
             }}
           >
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap"
-              style={{ background: "linear-gradient(135deg, #9d8fff 0%, #e879f9 100%)" }}>
+            <div
+              className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap"
+              style={{ background: "#9d8fff" }}
+            >
               Most popular
             </div>
 
@@ -532,11 +674,7 @@ function Pricing() {
             </ul>
             <Link
               href="/pricing"
-              className="block w-full text-center py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-              style={{
-                background: "linear-gradient(135deg, #9d8fff 0%, #c084fc 55%, #e879f9 100%)",
-                boxShadow: "0 0 20px rgba(157,143,255,0.3)",
-              }}
+              className="btn-primary block w-full text-center py-2.5 rounded-xl text-sm"
             >
               Upgrade to Pro →
             </Link>
@@ -559,23 +697,15 @@ function Pricing() {
 function CtaBanner() {
   return (
     <section className="px-4 py-16">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto" data-reveal>
         <div
           className="relative rounded-3xl overflow-hidden p-12 text-center"
           style={{
-            background:
-              "linear-gradient(135deg, rgba(157,143,255,0.15) 0%, rgba(232,121,249,0.08) 100%)",
+            background: "#0f0d1a",
             border: "1px solid rgba(157,143,255,0.2)",
+            boxShadow: "0 0 80px rgba(0,0,0,0.6)",
           }}
         >
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse 70% 80% at 50% 100%, rgba(157,143,255,0.12) 0%, transparent 70%)",
-            }}
-          />
           <div className="relative z-10">
             <h2 className="text-4xl sm:text-5xl font-extrabold mb-4">
               <span className="text-text1">Your first MCP server</span>
@@ -588,11 +718,7 @@ function CtaBanner() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/auth"
-                className="px-8 py-3.5 rounded-xl font-bold text-white text-[15px] transition-all"
-                style={{
-                  background: "linear-gradient(135deg, #9d8fff 0%, #c084fc 55%, #e879f9 100%)",
-                  boxShadow: "0 0 30px rgba(157,143,255,0.4)",
-                }}
+                className="btn-primary px-8 py-3.5 rounded-xl text-[15px]"
               >
                 Start for free →
               </Link>

@@ -36,7 +36,7 @@ function CreateContent() {
 
   const [url,          setUrl]          = useState(params.get("url") ?? "");
   const [maxSteps,     setMaxSteps]     = useState<number | "">(0);
-  const [githubRepo,   setGithubRepo]   = useState("");
+  const [githubRepos,  setGithubRepos]  = useState<string[]>([""]);
   const [githubToken,  setGithubToken]  = useState("");
   const [showPat,      setShowPat]      = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
@@ -93,10 +93,11 @@ function CreateContent() {
         url: url.trim(),
         max_steps: maxSteps || null,
       };
-      if (githubRepo.trim()) {
-        body.github_repo = githubRepo.trim();
-        if (sessionRef.current)    body.github_session_id = sessionRef.current;
-        else if (githubToken.trim()) body.github_token   = githubToken.trim();
+      const validRepos = githubRepos.map((r) => r.trim()).filter(Boolean);
+      if (validRepos.length > 0) {
+        body.github_repos = validRepos;
+        if (sessionRef.current)      body.github_session_id = sessionRef.current;
+        else if (githubToken.trim()) body.github_token      = githubToken.trim();
       }
 
       const res = await fetch("/api/jobs", {
@@ -278,19 +279,44 @@ function CreateContent() {
                 )}
 
                 {(githubUser || isPro) && (
-                  <div>
-                    <label className="block text-xs text-text2 mb-1">
-                      Repository URL or <code className="text-accent">owner/repo</code>
+                  <div className="space-y-2">
+                    <label className="block text-xs text-text2">
+                      Repository URLs or <code className="text-accent">owner/repo</code>
                     </label>
-                    <input
-                      type="text"
-                      value={githubRepo}
-                      onChange={(e) => setGithubRepo(e.target.value)}
-                      placeholder="https://github.com/owner/repo"
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text1 placeholder-muted outline-none focus:border-accent"
-                    />
+                    {githubRepos.map((repo, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={repo}
+                          onChange={(e) => {
+                            const next = [...githubRepos];
+                            next[idx] = e.target.value;
+                            setGithubRepos(next);
+                          }}
+                          placeholder="https://github.com/owner/repo"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="flex-1 bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text1 placeholder-muted outline-none focus:border-accent"
+                        />
+                        {githubRepos.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setGithubRepos(githubRepos.filter((_, i) => i !== idx))}
+                            className="text-muted hover:text-danger transition-colors text-lg leading-none px-1"
+                            aria-label="Remove repo"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setGithubRepos([...githubRepos, ""])}
+                      className="text-[11px] text-accent hover:text-accent-h transition-colors flex items-center gap-1"
+                    >
+                      <span className="text-base leading-none">+</span> Add another repository
+                    </button>
                   </div>
                 )}
               </div>

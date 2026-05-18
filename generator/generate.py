@@ -194,11 +194,55 @@ def {fn_name}(args: dict) -> str:
     return f"HTTP {{resp.status_code}}\\n\\n{{text}}"
 '''
 
+DIRECT_TOOL_TEMPLATE = '''@mcp.tool()
+def {fn_name}(args: dict) -> str:
+    """{description}
+
+    Input schema (JSON):
+{schema_doc}
+
+    Returns: {returns}
+    """
+    # Validate required
+    for r in {required!r}:
+        if r not in args:
+            return f"Error: missing required parameter `{{r}}`"
+
+    try:
+{code_body}
+    except Exception as e:
+        return f"Error: {{e}}"
+'''
+
+
+def render_direct_tool(feature: dict) -> str:
+    """Render a tool whose implementation comes directly from source code."""
+    schema = _build_input_schema(feature)
+    schema_doc = indent(json.dumps(schema, indent=2), "        ")
+    raw_body = feature.get("code_snippet", "        return 'Not implemented'")
+    # Ensure every line is indented by 8 spaces (inside try block)
+    body_lines = [
+        "        " + line if not line.startswith("        ") else line
+        for line in raw_body.splitlines()
+    ]
+    code_body = "\n".join(body_lines) or "        return 'Not implemented'"
+    return DIRECT_TOOL_TEMPLATE.format(
+        fn_name=_safe_id(feature["id"]),
+        description=feature.get("description", "").replace('"""', "'''"),
+        schema_doc=schema_doc,
+        returns=feature.get("returns", "Result of the operation."),
+        required=schema["required"],
+        code_body=code_body,
+    )
+
 
 def render_tool(feature: dict) -> str:
+    if feature.get("implementation_type") == "direct_code" and feature.get("code_snippet"):
+        return render_direct_tool(feature)
+
+    endpoint = feature.get("endpoint") or {}
     schema = _build_input_schema(feature)
-    endpoint = feature["endpoint"]
-    url_t = endpoint["url_template"]
+    url_t = endpoint.get("url_template", "")
     path_params = _extract_path_params(url_t)
     query_params = [q["name"] for q in (endpoint.get("query_params") or []) if q.get("name")]
     body_props = []
@@ -230,8 +274,19 @@ def generate(spec: dict, out_dir: str | Path, user_env: dict | None = None) -> N
     auth_type = auth.get("type", "none")
     auth_notes = auth.get("notes", "")
 
+    # Collect extra imports declared by direct_code features
+    extra_imports: list[str] = []
+    seen_imports: set[str] = set()
+    for f in spec.get("features", []):
+        if f.get("implementation_type") == "direct_code":
+            for imp in f.get("code_imports") or []:
+                if imp and imp not in seen_imports:
+                    seen_imports.add(imp)
+                    extra_imports.append(imp)
+
     tools = "\n\n".join(render_tool(f) for f in spec.get("features", []))
 
+    extra_imports_block = ("\n".join(extra_imports) + "\n\n") if extra_imports else ""
     server_code = SERVER_TEMPLATE.format(
         product_name=spec.get("product_name", "auto-mcp"),
         base_url=spec.get("base_url", ""),
@@ -239,6 +294,12 @@ def generate(spec: dict, out_dir: str | Path, user_env: dict | None = None) -> N
         auth_notes=auth_notes,
         tool_definitions=tools,
     )
+    # Inject extra imports right after the built-in imports block
+    if extra_imports_block:
+        server_code = server_code.replace(
+            "import httpx\nfrom mcp.server.fastmcp import FastMCP",
+            "import httpx\nfrom mcp.server.fastmcp import FastMCP\n\n" + extra_imports_block.rstrip(),
+        )
 
     (out_dir / "server.py").write_text(server_code)
     (out_dir / "requirements.txt").write_text("mcp>=1.0.0\nhttpx>=0.27.0\n")

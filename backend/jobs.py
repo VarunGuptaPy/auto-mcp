@@ -46,7 +46,7 @@ class JobState:
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     queue_position: int = 0
-    github_repo: str | None = None          # repo URL (safe to persist)
+    github_repos: list[str] | None = None   # one or more repo URLs (safe to persist)
     has_code_analysis: bool = False         # True once code stage completes
 
     def to_dict(self) -> dict[str, Any]:
@@ -165,16 +165,19 @@ class JobManager:
         max_steps: int | None = None,
         email: str | None = None,
         password: str | None = None,
-        github_repo: str | None = None,
+        github_repo: str | None = None,       # backwards-compat single repo
+        github_repos: list[str] | None = None,  # preferred: multiple repos
         github_token: str | None = None,  # kept in memory only, NEVER persisted
     ) -> str:
         job_id = str(uuid.uuid4())
+        # Merge single + list into one canonical list
+        repos: list[str] | None = github_repos or ([github_repo] if github_repo else None)
         state = JobState(
             id=job_id,
             url=url,
             max_steps=max_steps,
             total_steps=max_steps,
-            github_repo=github_repo,
+            github_repos=repos,
         )
         state.queue_position = self._queue.qsize()
         self._jobs[job_id] = state

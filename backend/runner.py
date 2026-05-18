@@ -32,9 +32,9 @@ async def run_job(
     trace_dir = job_dir / "trace"
     shots_dir = trace_dir / "screenshots"
 
-    # Retrieve the github_repo from persistent job state
+    # Retrieve the github_repos list from persistent job state
     job_state = manager._jobs.get(job_id)
-    github_repo: str | None = job_state.github_repo if job_state else None
+    github_repos: list[str] = (job_state.github_repos or []) if job_state else []
 
     # ------------------------------------------------------------------
     # Shared question helper — emits chat_question SSE, waits for answer
@@ -74,18 +74,19 @@ async def run_job(
     def get_user_messages() -> list[str]:
         return manager.pop_user_messages(job_id)
 
-    # Holds code analysis results; populated in Stage 0 if a repo is provided.
+    # Holds code analysis results; populated in Stage 0 if any repos provided.
     code_routes: list = []
     code_env_vars: list = []
     vector_store = None
+    code_lookup = None  # callable: query → list[str] — passed to explorer
 
     try:
         # ------------------------------------------------------------------ #
-        # Stage 0 — Code analysis (only when a GitHub repo is provided)
+        # Stage 0 — Code analysis (runs for each repo in the list)
         # ------------------------------------------------------------------ #
-        if github_repo:
+        if github_repos:
             manager.update(job_id, status=Status.CODE_ANALYSIS,
-                           current_action="Fetching repository…")
+                           current_action=f"Fetching {len(github_repos)} repository(-ies)…")
             manager.emit(job_id, {"type": "stage_change", "stage": Status.CODE_ANALYSIS})
 
             try:
@@ -96,25 +97,45 @@ async def run_job(
 
                 loop = asyncio.get_running_loop()
 
-                # Fetch code as a single zipball — token used here, then discarded
-                manager.update(job_id, current_action="Downloading repository (zipball)…")
-                repo_files = await loop.run_in_executor(
-                    None, lambda: fetch_repo(github_repo, github_token)
-                )
-                # Discard token from local scope immediately after use
+                # Fetch each repo and merge files — later repos win on path conflicts
+                all_files_by_path: dict[str, object] = {}
+                for repo_url in github_repos:
+                    manager.update(job_id, current_action=f"Downloading {repo_url}…")
+                    try:
+                        files = await loop.run_in_executor(
+                            None, lambda u=repo_url: fetch_repo(u, github_token)
+                        )
+                        for f in files:
+                            all_files_by_path[f.path] = f
+                        manager.emit(job_id, {
+                            "type": "repo_fetched",
+                            "repo": repo_url,
+                            "files": len(files),
+                        })
+                    except Exception as exc:
+                        manager.emit(job_id, {
+                            "type": "code_analysis_warning",
+                            "message": f"Could not fetch {repo_url}: {exc}",
+                        })
+
+                # Discard token immediately after all fetches
                 github_token = None  # noqa: F841
 
+                repo_files = list(all_files_by_path.values())
                 manager.update(job_id, current_action=f"Indexing {len(repo_files)} files…")
 
                 # Build vector store in job dir (stays on user's machine).
-                # Construction runs in executor so ChromaDB model loading
-                # doesn't block the event loop.
                 vs_dir = job_dir / "vector_store"
                 def _build_vector_store():
                     vs = CodeVectorStore(vs_dir)
                     vs.add_files(repo_files)
                     return vs
                 vector_store = await loop.run_in_executor(None, _build_vector_store)
+
+                # Provide a sync lookup function the explorer will call per step
+                _vs = vector_store
+                def code_lookup(query: str) -> list[str]:
+                    return _vs.query(query, n_results=3)
 
                 # Static route + env-var extraction (CPU-only, no LLM)
                 code_routes = await loop.run_in_executor(None, extract_routes, repo_files)
@@ -127,6 +148,7 @@ async def run_job(
                 )
                 manager.emit(job_id, {
                     "type": "code_analysis_done",
+                    "repos": github_repos,
                     "routes_found": len(code_routes),
                     "env_vars_found": len(code_env_vars),
                     "vector_backend": vector_store.backend,
@@ -150,7 +172,6 @@ async def run_job(
                         fields=fields,
                     )
                     if env_answer and isinstance(env_answer, dict):
-                        # Store provided values in job dir for generator
                         env_file = job_dir / "user_env.json"
                         env_file.write_text(json.dumps(env_answer, indent=2))
 
@@ -161,6 +182,7 @@ async def run_job(
                     "message": f"Code analysis failed, continuing with browser-only mode: {exc}",
                 })
                 github_token = None
+                code_lookup = None
 
         # ------------------------------------------------------------------ #
         # Stage 1 — Explore  (loops until user confirms full coverage)
@@ -184,6 +206,7 @@ async def run_job(
                     on_question=on_question,
                     get_user_messages=get_user_messages,
                     initial_instructions=seeded,
+                    code_lookup=code_lookup,
                 )
             )
 

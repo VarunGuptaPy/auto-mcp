@@ -134,7 +134,8 @@ def _safe_product_name(raw: str) -> str:
 class CreateJobRequest(BaseModel):
     url: str
     max_steps: Optional[int] = 50
-    github_repo: Optional[str] = None
+    github_repo: Optional[str] = None          # backwards-compat: single repo
+    github_repos: Optional[list[str]] = None   # preferred: multiple repos
     github_token: Optional[str] = None
     github_session_id: Optional[str] = None
 
@@ -182,10 +183,14 @@ async def create_job(request: Request, body: CreateJobRequest):
         if oauth_token:
             github_token = oauth_token
 
+    # Merge single + list fields into one canonical list
+    all_repos: list[str] | None = body.github_repos or (
+        [body.github_repo] if body.github_repo else None
+    )
     job_id = manager.create(
         url=body.url,
         max_steps=max_steps,
-        github_repo=body.github_repo or None,
+        github_repos=all_repos,
         github_token=github_token,
     )
     return CreateJobResponse(job_id=job_id)

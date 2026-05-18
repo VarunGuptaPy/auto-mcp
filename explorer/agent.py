@@ -288,6 +288,14 @@ ASK USER IMMEDIATELY (do not attempt to fill these yourself):
     The system will automatically call set_input_files on that element once you receive
     the file — do NOT emit ask_user for the same field again, do NOT emit upload_file
     separately. The upload is handled for you. Move on to the next action after asking.
+
+    MULTI-FIELD UPLOAD FORMS (e.g. "Front of Card" + "Back of Card"):
+    - Ask for each file field ONCE. Use a distinct "aid" per field.
+    - After ALL required file fields are covered, IMMEDIATELY click the form's
+      submit / confirm button (e.g. "Upload Card", "Submit", "Save"). Do NOT ask
+      again for a field whose "aid" you already asked about — the system tracks it.
+    - If the qa_history shows "[File already uploaded to element X]", that field
+      is done. Click submit and move on.
   CAPTCHA / reCAPTCHA / hCaptcha / "I'm not a robot"
     → ask_user: "I found a CAPTCHA on this page. Can you solve it, or should I skip this
       flow and explore other features?"
@@ -386,6 +394,7 @@ def _build_user_message(
     visited_urls: set[str] | None = None,
     user_instructions: list[str] | None = None,
     loop_warning: str | None = None,
+    code_context: list[str] | None = None,
 ) -> list[dict]:
     history_lines = [
         f"  step {a.step}: {a.action} {a.selector or ''} {a.value or ''} -- {a.reasoning}"
@@ -420,11 +429,16 @@ def _build_user_message(
     if loop_warning:
         loop_blurb = f"\n⚠️  LOOP DETECTED: {loop_warning}\n"
 
+    code_blurb = ""
+    if code_context:
+        snippets = "\n---\n".join(code_context[:3])
+        code_blurb = f"\nRelevant source code (use as reference to understand this page's features and data shapes):\n{snippets}\n"
+
     text = f"""{instructions_blurb}Current URL: {url}
 
 History so far (last 20 steps):
 {chr(10).join(history_lines) or '  (none)'}
-{loop_blurb}{creds_blurb}{qa_blurb}{visited_blurb}
+{loop_blurb}{creds_blurb}{qa_blurb}{visited_blurb}{code_blurb}
 
 Visible interactive elements — use the `aid` to reference them:
 {json.dumps(elements[:150], indent=2)}
@@ -460,6 +474,7 @@ async def explore(
     on_question: Optional[Callable[[str, str, str, list], Awaitable[Optional[str]]]] = None,
     get_user_messages: Optional[Callable[[], list[str]]] = None,
     initial_instructions: list[str] | None = None,
+    code_lookup: Optional[Callable[[str], list[str]]] = None,
 ) -> ExplorationTrace:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -473,6 +488,8 @@ async def explore(
     trace = ExplorationTrace(target_url=url, started_at=time.time())
     qa_history: list[dict] = []
     ask_user_streak = 0
+    upload_streak = 0          # consecutive upload requests without other actions
+    uploaded_aids: set[str] = set()  # aids where set_input_files already succeeded
     visited_urls: set[str] = set()
     user_instructions: list[str] = list(initial_instructions or [])  # seeded + live messages
     recent_actions: list[tuple[str, str]] = []  # (action_kind, aid) last 10
@@ -507,6 +524,20 @@ async def explore(
             shot_path = shots_dir / f"step_{step:03d}.png"
             shot_path.write_bytes(base64.standard_b64decode(screenshot_b64))
 
+            # Query code index for snippets relevant to the current page
+            step_code_context: list[str] | None = None
+            if code_lookup:
+                el_names = " ".join(
+                    el.get("name") or el.get("placeholder") or ""
+                    for el in elements[:40]
+                    if el.get("name") or el.get("placeholder")
+                )
+                query = f"url: {page.url} {el_names}"
+                try:
+                    step_code_context = code_lookup(query) or None
+                except Exception:
+                    step_code_context = None
+
             # Detect repetitive actions on the same element
             loop_warning: str | None = None
             if len(recent_actions) >= 3:
@@ -528,6 +559,7 @@ async def explore(
                 page.url, elements, trace.actions, creds, qa_history, visited_urls,
                 user_instructions if user_instructions else None,
                 loop_warning,
+                step_code_context,
             )
             text_block = next((p for p in text_parts if p.get("type") == "text"), {})
 
@@ -596,8 +628,18 @@ async def explore(
                         # again and cannot loop back to ask_user for the same field.
                         if action.get("question_type") == "file_upload":
                             aid = action.get("aid", "")
-                            if aid:
+                            if aid and aid in uploaded_aids:
+                                # Already done — tell the agent so it moves on
                                 ask_user_streak = 0
+                                upload_streak = 0
+                                qa_history.append({
+                                    "q": action.get("question", ""),
+                                    "a": f"[File already uploaded to element {aid}. "
+                                         "Do NOT ask again — click the submit/confirm button now.]",
+                                })
+                            elif aid:
+                                ask_user_streak = 0
+                                upload_streak = 0
                                 print(f"[step {step}] auto-upload {answer!r} → {aid}")
                                 try:
                                     await _execute(page, {
@@ -605,6 +647,7 @@ async def explore(
                                         "aid": aid,
                                         "path": answer,
                                     })
+                                    uploaded_aids.add(aid)
                                     await _wait_stable(page)
                                     visited_urls.add(page.url)
                                 except Exception as e:
@@ -613,6 +656,28 @@ async def explore(
 
             # ---- upload_file — resolve server path from user if missing ----
             if kind == "upload_file":
+                aid = action.get("aid", "")
+
+                # Skip if this element was already uploaded successfully
+                if aid and aid in uploaded_aids:
+                    print(f"[step {step}] upload_file skipped — {aid} already uploaded")
+                    qa_history.append({
+                        "q": "file upload",
+                        "a": f"[{aid} already has a file attached. Click the submit button now.]",
+                    })
+                    continue
+
+                upload_streak += 1
+                if upload_streak > 3:
+                    # Prevent infinite upload loops — dismiss and move on
+                    print(f"[step {step}] upload_file streak exceeded — dismissing")
+                    upload_streak = 0
+                    user_instructions.append(
+                        "You have been stuck on an upload modal. "
+                        "Press Cancel/Close or navigate away and explore other features."
+                    )
+                    continue
+
                 file_path = action.get("path", "").strip()
                 if not file_path and on_question:
                     qid = f"upload-{step}"
@@ -627,8 +692,11 @@ async def explore(
                         qa_history.append({"q": "file upload needed", "a": file_path})
                 if file_path:
                     ask_user_streak = 0
+                    upload_streak = 0
                     try:
                         await _execute(page, {**action, "path": file_path})
+                        if aid:
+                            uploaded_aids.add(aid)
                     except Exception as e:
                         print(f"[step {step}] upload error: {e}")
                     await _wait_stable(page)
@@ -636,6 +704,7 @@ async def explore(
                 continue
 
             ask_user_streak = 0  # reset on any real action
+            upload_streak = 0
 
             # Track recent (action, aid) to detect loops
             recent_actions.append((kind, action.get("aid", "")))

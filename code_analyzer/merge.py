@@ -18,14 +18,16 @@ from openai import OpenAI
 MODEL = "deepseek-chat"
 _DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
-MERGE_SYSTEM = """You are an API analyst. You will receive:
+MERGE_SYSTEM = """You are an API analyst and MCP architect. You will receive:
   1. A feature spec derived from browser network-traffic observation.
   2. A list of routes found by statically analysing the application source code.
   3. Relevant code snippets for those routes.
 
 Your job: produce ONE comprehensive JSON feature spec that covers EVERY route
 from both sources. Use browser data for realistic request/response examples;
-use code data to discover routes the browser missed and to fill in schemas.
+use code data to discover routes the browser missed, to fill in schemas, and
+to decide whether a feature is better implemented as direct Python code
+rather than an HTTP proxy.
 
 Output ONE JSON object — no markdown, no prose:
 
@@ -42,6 +44,9 @@ Output ONE JSON object — no markdown, no prose:
       "name": "Human readable name",
       "description": "What a user accomplishes. 1-2 sentences.",
       "source": "browser|code|both",
+      "implementation_type": "http_proxy|direct_code",
+      "code_snippet": "...",
+      "code_imports": ["import json"],
       "endpoint": {
         "method": "GET|POST|PUT|DELETE|PATCH",
         "url_template": "https://host/path/{id}",
@@ -60,6 +65,21 @@ Rules:
 - Skip pure static-asset endpoints (CSS, JS bundles, images).
 - Keep env_vars only for variables that the MCP server will actually need
   (auth tokens, API keys, etc.), not build-time frontend variables.
+
+implementation_type rules — read carefully:
+  "http_proxy" (default): the MCP tool forwards the call to the HTTP endpoint.
+    Set endpoint to the URL. Set code_snippet and code_imports to null.
+  "direct_code": use when the feature can be implemented more accurately or
+    completely in Python directly — e.g. pure business logic, data transforms,
+    algorithms, SDK calls, or features with no clean HTTP endpoint.
+    When you choose direct_code:
+    - Set code_snippet to a COMPLETE, RUNNABLE Python function BODY (no def
+      line, just the indented body). It must end with a `return` statement
+      that returns a string. Use only the args dict for inputs.
+    - Set code_imports to a list of import lines the body needs.
+    - Set endpoint to null.
+    - Only choose direct_code when you can produce a working implementation
+      from the provided code snippets. If uncertain, use http_proxy.
 """
 
 
@@ -94,15 +114,32 @@ def merge_analysis(
     routes_text = "\n".join(route_lines) or "  (none found)"
 
     # ---- Retrieve relevant code snippets --------------------------------- #
+    # Per-route: fetch handler body + request/response shapes
     seen_chunks: set[str] = set()
     context_chunks: list[str] = []
     for r in code_routes[:40]:
-        query = f"{r.method} {r.path} {r.handler_name} request response"
-        for chunk in vector_store.query(query, n_results=3):
+        for query in [
+            f"{r.handler_name} {r.method} {r.path}",
+            f"{r.handler_name} implementation business logic",
+            f"{r.method} {r.path} request response schema",
+        ]:
+            for chunk in vector_store.query(query, n_results=3):
+                if chunk not in seen_chunks:
+                    seen_chunks.add(chunk)
+                    context_chunks.append(chunk)
+
+    # Broad pass: discover utility/helper logic not tied to a specific route
+    for query in [
+        "utility helper pure function data transform",
+        "business logic calculation algorithm",
+        "class service model schema validation",
+    ]:
+        for chunk in vector_store.query(query, n_results=4):
             if chunk not in seen_chunks:
                 seen_chunks.add(chunk)
                 context_chunks.append(chunk)
-    code_context = "\n\n---\n\n".join(context_chunks[:25])
+
+    code_context = "\n\n---\n\n".join(context_chunks[:40])
 
     # ---- Env vars -------------------------------------------------------- #
     env_lines: list[str] = []
@@ -116,8 +153,8 @@ def merge_analysis(
     if len(browser_spec_json) > 10_000:
         browser_spec_json = browser_spec_json[:10_000] + "\n... [truncated]"
 
-    if len(code_context) > 8_000:
-        code_context = code_context[:8_000] + "\n... [truncated]"
+    if len(code_context) > 14_000:
+        code_context = code_context[:14_000] + "\n... [truncated]"
 
     user_msg = f"""Target URL: {target_url}
 

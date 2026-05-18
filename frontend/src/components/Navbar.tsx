@@ -32,7 +32,7 @@ export default function Navbar() {
         <Link href="/" className="font-mono text-[15px] font-bold shrink-0 flex items-center gap-1.5">
           <span
             className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black text-white"
-            style={{ background: "linear-gradient(135deg, #9d8fff, #e879f9)" }}
+            style={{ background: "#9d8fff" }}
           >
             A
           </span>
@@ -85,7 +85,7 @@ export default function Navbar() {
                 ) : (
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                    style={{ background: "linear-gradient(135deg, #9d8fff, #e879f9)" }}
+                    style={{ background: "#9d8fff" }}
                   >
                     {(user.displayName ?? user.email ?? "U")[0].toUpperCase()}
                   </div>
@@ -138,8 +138,7 @@ export default function Navbar() {
               </Link>
               <Link
                 href="/auth"
-                className="px-4 py-1.5 rounded-lg text-sm font-bold text-white transition-all"
-                style={{ background: "linear-gradient(135deg, #9d8fff, #e879f9)", boxShadow: "0 0 16px rgba(157,143,255,0.3)" }}
+                className="btn-primary px-4 py-1.5 rounded-lg text-sm"
               >
                 Get started
               </Link>
