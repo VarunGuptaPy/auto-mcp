@@ -2,19 +2,53 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 
+/* ─── useTheme hook ───────────────────────────────────────────── */
+function useTheme() {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("theme");
+    if (stored === "light") {
+      document.documentElement.classList.remove("dark");
+      setTheme("light");
+    } else {
+      document.documentElement.classList.add("dark");
+      setTheme("dark");
+    }
+  }, []);
+
+  function toggle() {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      if (next === "light") {
+        document.documentElement.classList.remove("dark");
+      } else {
+        document.documentElement.classList.add("dark");
+      }
+      localStorage.setItem("theme", next);
+      return next;
+    });
+  }
+
+  return { theme, toggle };
+}
+
+/* ─── Main component ──────────────────────────────────────────── */
 export default function Navbar() {
   const { user, loading, signOut } = useAuth();
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
+  const { theme, toggle } = useTheme();
+
   const [open,       setOpen]       = useState(false);
   const [avatarMenu, setAvatarMenu] = useState(false);
 
   const links = [
     { href: "/#how-it-works", label: "How it works" },
-    { href: "/pricing",       label: "Pricing" },
+    { href: "/pricing",        label: "Pricing" },
     { href: "https://github.com/VarunGuptaPy/auto-mcp", label: "GitHub", ext: true },
   ];
 
@@ -25,23 +59,19 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full glass border-b border-border/60">
-      <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
+    <header className="sticky top-0 z-50 w-full bg-surface/95 backdrop-blur-xl border-b border-border">
+      <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-16 grid grid-cols-[auto_1fr_auto] items-center gap-4">
 
         {/* Logo */}
-        <Link href="/" className="font-mono text-[15px] font-bold shrink-0 flex items-center gap-1.5">
-          <span
-            className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black text-white"
-            style={{ background: "#6366f1" }}
-          >
-            A
+        <Link href="/" className="shrink-0 flex items-center gap-2.5 group">
+          <LogoMark />
+          <span className="font-semibold text-[15px] tracking-tight text-text1 group-hover:opacity-80 transition-opacity">
+            auto<span className="text-accent">-mcp</span>
           </span>
-          <span className="text-text1">auto</span>
-          <span className="text-muted">-mcp</span>
         </Link>
 
-        {/* Nav links */}
-        <div className="hidden md:flex items-center gap-0.5 flex-1">
+        {/* Desktop nav links — centered */}
+        <div className="hidden md:flex justify-center items-center gap-1">
           {links.map((l) =>
             l.ext ? (
               <a
@@ -49,7 +79,7 @@ export default function Navbar() {
                 href={l.href}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 text-sm text-text2 hover:text-text1 rounded-lg hover:bg-surface-2 transition-colors"
+                className="px-3.5 py-1.5 text-sm text-text2 hover:text-text1 rounded-lg hover:bg-surface-2 transition-colors font-medium"
               >
                 {l.label}
               </a>
@@ -57,8 +87,8 @@ export default function Navbar() {
               <Link
                 key={l.href}
                 href={l.href}
-                className={`px-3 py-1.5 text-sm rounded-lg hover:bg-surface-2 transition-colors ${
-                  pathname === l.href ? "text-text1" : "text-text2 hover:text-text1"
+                className={`px-3.5 py-1.5 text-sm rounded-lg transition-colors font-medium ${
+                  pathname === l.href ? "text-text1 bg-surface-2" : "text-text2 hover:text-text1 hover:bg-surface-2"
                 }`}
               >
                 {l.label}
@@ -67,10 +97,22 @@ export default function Navbar() {
           )}
         </div>
 
-        <div className="flex-1 md:hidden" />
+        {/* Mobile: empty center cell so grid still works */}
+        <div className="md:hidden" />
 
-        {/* Right */}
+        {/* Right section */}
         <div className="flex items-center gap-2">
+
+          {/* Theme toggle */}
+          <button
+            onClick={toggle}
+            aria-label="Toggle theme"
+            className="p-1.5 rounded-lg text-text2 hover:text-text1 hover:bg-surface-2 transition-colors"
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+
+          {/* Auth section */}
           {loading ? (
             <div className="w-7 h-7 rounded-full bg-surface animate-pulse" />
           ) : user ? (
@@ -83,10 +125,7 @@ export default function Navbar() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full ring-1 ring-border" />
                 ) : (
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                    style={{ background: "#6366f1" }}
-                  >
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center bg-accent text-white text-xs font-bold">
                     {(user.displayName ?? user.email ?? "U")[0].toUpperCase()}
                   </div>
                 )}
@@ -104,9 +143,9 @@ export default function Navbar() {
                       <p className="text-xs text-muted truncate">{user.email}</p>
                     </div>
                     {[
-                      { href: "/dashboard",  label: "Dashboard",     icon: <HomeIcon /> },
-                      { href: "/create",     label: "New MCP server", icon: <PlusIcon /> },
-                      { href: "/pricing",    label: "Upgrade plan",   icon: <StarIcon /> },
+                      { href: "/dashboard", label: "Dashboard",      icon: <HomeIcon /> },
+                      { href: "/create",    label: "New MCP server",  icon: <PlusIcon /> },
+                      { href: "/pricing",   label: "Upgrade plan",    icon: <StarIcon /> },
                     ].map((item) => (
                       <Link
                         key={item.href}
@@ -133,7 +172,10 @@ export default function Navbar() {
             </div>
           ) : (
             <>
-              <Link href="/auth" className="hidden sm:block px-3 py-1.5 text-sm text-text2 hover:text-text1 transition-colors">
+              <Link
+                href="/auth"
+                className="hidden sm:block px-3 py-1.5 text-sm text-text2 hover:text-text1 transition-colors"
+              >
                 Sign in
               </Link>
               <Link
@@ -145,34 +187,49 @@ export default function Navbar() {
             </>
           )}
 
+          {/* Mobile hamburger */}
           <button
             className="md:hidden p-1.5 rounded-lg text-text2 hover:text-text1 hover:bg-surface-2"
             onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
           >
             <MenuIcon open={open} />
           </button>
         </div>
       </nav>
 
+      {/* Mobile menu */}
       {open && (
         <div className="md:hidden border-t border-border bg-surface/95 px-4 py-3 space-y-0.5">
           {links.map((l) =>
             l.ext ? (
-              <a key={l.href} href={l.href} target="_blank" rel="noreferrer"
+              <a
+                key={l.href}
+                href={l.href}
+                target="_blank"
+                rel="noreferrer"
                 className="block px-3 py-2 text-sm text-text2 hover:text-text1 rounded-lg"
-                onClick={() => setOpen(false)}>
+                onClick={() => setOpen(false)}
+              >
                 {l.label}
               </a>
             ) : (
-              <Link key={l.href} href={l.href}
+              <Link
+                key={l.href}
+                href={l.href}
                 className="block px-3 py-2 text-sm text-text2 hover:text-text1 rounded-lg"
-                onClick={() => setOpen(false)}>
+                onClick={() => setOpen(false)}
+              >
                 {l.label}
               </Link>
             )
           )}
           {!user && (
-            <Link href="/auth" className="block px-3 py-2 text-sm text-text2 hover:text-text1 rounded-lg" onClick={() => setOpen(false)}>
+            <Link
+              href="/auth"
+              className="block px-3 py-2 text-sm text-text2 hover:text-text1 rounded-lg"
+              onClick={() => setOpen(false)}
+            >
               Sign in
             </Link>
           )}
@@ -182,12 +239,75 @@ export default function Navbar() {
   );
 }
 
-/* ─── Tiny icons ─────────────────────────────────────────────── */
+/* ─── Logo mark ───────────────────────────────────────────────── */
+function LogoMark() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="amcp-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#22d3ee" />
+          <stop offset="1" stopColor="#0891b2" />
+        </linearGradient>
+      </defs>
+
+      {/* Background rounded square */}
+      <rect width="32" height="32" rx="9" fill="url(#amcp-grad)" />
+
+      {/* Left arc of chain link — represents "website" */}
+      <path
+        d="M13 11.5a4 4 0 0 0-4 4v1a4 4 0 0 0 4 4h1.5"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+
+      {/* Right arc of chain link — represents "MCP server" */}
+      <path
+        d="M19 20.5a4 4 0 0 0 4-4v-1a4 4 0 0 0-4-4h-1.5"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+
+      {/* Center bar connecting the two — represents auto-mcp bridge */}
+      <path
+        d="M13.5 16h5"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+
+      {/* Small dot at center — the "connection point" */}
+      <circle cx="16" cy="16" r="1.2" fill="white" />
+    </svg>
+  );
+}
+
+/* ─── Icons ───────────────────────────────────────────────────── */
 const ico = (d: string) => (
   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d={d} />
   </svg>
 );
+
+function SunIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    </svg>
+  );
+}
 
 function ChevronIcon()  { return ico("M19 9l-7 7-7-7"); }
 function MenuIcon({ open }: { open: boolean }) {

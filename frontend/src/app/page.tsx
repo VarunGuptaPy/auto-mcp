@@ -38,8 +38,10 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <CompatStrip />
+        <Stats />
         <ProductPreview />
         <HowItWorks />
+        <CodePreview />
         <BentoFeatures />
         <Pricing />
         <CtaBanner />
@@ -64,73 +66,61 @@ function Hero() {
   }
 
   return (
-    <section className="relative min-h-[88vh] flex flex-col items-center justify-center px-4 pt-10 pb-20 text-center overflow-hidden">
+    <section className="hero-bg relative min-h-[90vh] flex flex-col items-center justify-center px-4 pt-10 pb-28 text-center overflow-hidden">
       {/* Dot grid */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(circle, #27272a 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
-          opacity: 0.5,
-        }}
-      />
-      {/* Radial gradient glow */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 65%)",
-        }}
-      />
+      <div aria-hidden className="absolute inset-0 dot-grid opacity-80 pointer-events-none" />
 
-      <div className="relative z-10 max-w-4xl mx-auto">
-        {/* Eyebrow badge */}
-        <div className="animate-fade-in inline-flex items-center gap-2.5 mb-7 px-3.5 py-1.5 rounded-full border border-accent/25 bg-accent/10 text-xs font-medium">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          <span className="text-accent">Powered by Claude + Playwright</span>
-          <span className="text-muted">·</span>
-          <span className="text-text2">MCP standard</span>
+      <div className="relative z-10 max-w-3xl mx-auto">
+        {/* Dodo-style pill badge — simple border, no colored bg */}
+        <div className="animate-fade-in inline-flex items-center gap-2 mb-8 px-4 py-1.5 rounded-full border border-border bg-surface/80 text-sm text-text2 shadow-sm">
+          <span className="font-medium text-text1">Powered by Claude + Playwright</span>
+          <span className="text-muted">→</span>
         </div>
 
-        {/* Headline */}
-        <h1 className="animate-fade-in-d1 text-[clamp(2.6rem,7vw,5.5rem)] font-extrabold tracking-tight leading-[1.04] mb-6">
-          <span className="text-text1">Every website</span>
-          <br />
-          <span className="text-gradient-accent">is an API.</span>
-          <br />
-          <span className="text-text1">Now your AI knows it.</span>
+        {/* Headline — large, heavy, tight */}
+        <h1
+          className="animate-fade-in-d1 font-black tracking-tight leading-[1.05] mb-6 text-text1"
+          style={{ fontSize: "clamp(2.8rem,7.5vw,5.5rem)" }}
+        >
+          Turn any website into<br />
+          <span className="text-gradient-accent">an MCP server.</span>
         </h1>
 
         {/* Subheadline */}
-        <p className="animate-fade-in-d2 text-[1.15rem] text-text2 leading-relaxed max-w-2xl mx-auto mb-10">
+        <p className="animate-fade-in-d2 text-lg text-text2 leading-relaxed max-w-xl mx-auto mb-10">
           Paste a URL. auto-mcp&apos;s browser agent maps every route, captures
           every endpoint, and ships a typed Python MCP server—without you writing
           a single line of code.
         </p>
 
-        {/* URL input form */}
-        <form
-          onSubmit={go}
-          className="animate-fade-in-d2 flex flex-col sm:flex-row gap-2.5 max-w-lg mx-auto mb-4"
-        >
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://api.example.com"
-            className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm text-text1 placeholder-muted outline-none focus:border-accent/60 transition-colors"
-          />
-          <button
-            type="submit"
-            className="btn-primary px-6 py-3 rounded-xl text-sm whitespace-nowrap"
+        {/* CTA — two rows matching Dodo's large button style */}
+        <div className="animate-fade-in-d2 flex flex-col sm:flex-row gap-3 justify-center mb-5">
+          <form onSubmit={go} className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://your-app.com"
+              className="bg-surface border border-border rounded-xl px-5 py-3.5 text-sm text-text1 placeholder-muted outline-none focus:border-accent/60 transition-colors shadow-sm w-72"
+            />
+            <button
+              type="submit"
+              className="btn-primary px-7 py-3.5 rounded-xl text-[15px] font-semibold whitespace-nowrap"
+            >
+              Generate MCP →
+            </button>
+          </form>
+          <a
+            href="https://github.com/VarunGuptaPy/auto-mcp"
+            target="_blank"
+            rel="noreferrer"
+            className="px-7 py-3.5 rounded-xl text-[15px] font-semibold text-text2 hover:text-text1 transition-colors whitespace-nowrap flex items-center justify-center gap-2"
           >
-            Generate MCP →
-          </button>
-        </form>
+            <GithubIcon /> View on GitHub
+          </a>
+        </div>
 
-        <p className="animate-fade-in-d3 text-xs text-muted">
+        <p className="animate-fade-in-d3 text-sm text-muted">
           Free to start · No credit card · 5 servers/month on free tier
         </p>
       </div>
@@ -138,29 +128,44 @@ function Hero() {
   );
 }
 
-/* ─── Compatibility strip ──────────────────────────────────── */
+/* ─── Compat strip ──────────────────────────────────────────── */
 
 function CompatStrip() {
   const tools = [
-    "Claude Desktop", "Cursor", "GPT-4o", "Cline", "Continue.dev",
-    "Windsurf", "Zed", "VS Code", "Claude Desktop", "Cursor", "GPT-4o",
-    "Cline", "Continue.dev", "Windsurf", "Zed", "VS Code",
+    "Claude Desktop",
+    "Cursor",
+    "GPT-4o",
+    "Cline",
+    "Continue.dev",
+    "Windsurf",
+    "Zed",
+    "VS Code",
+    "Claude Desktop",
+    "Cursor",
+    "GPT-4o",
+    "Cline",
+    "Continue.dev",
+    "Windsurf",
+    "Zed",
+    "VS Code",
   ];
 
   return (
-    <div className="relative border-y border-border py-4 overflow-hidden">
-      <div className="absolute inset-y-0 left-0 w-20 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(90deg, #09090b, transparent)" }} />
-      <div className="absolute inset-y-0 right-0 w-20 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(-90deg, #09090b, transparent)" }} />
+    <div className="relative border-y border-border py-5 overflow-hidden">
+      {/* Fade masks via CSS classes — no inline styles */}
+      <div className="absolute inset-y-0 left-0 w-24 z-10 pointer-events-none marquee-fade-l" />
+      <div className="absolute inset-y-0 right-0 w-24 z-10 pointer-events-none marquee-fade-r" />
 
-      <p className="text-center text-[10px] uppercase tracking-[0.2em] text-muted mb-3">
+      <p className="text-center text-[10px] uppercase tracking-[0.2em] text-muted mb-4">
         Works with every MCP-compatible client
       </p>
 
       <div className="flex animate-marquee whitespace-nowrap">
         {tools.map((t, i) => (
-          <span key={i} className="inline-flex items-center gap-3 mx-6 text-sm text-text2 font-medium">
+          <span
+            key={i}
+            className="inline-flex items-center gap-3 mx-7 text-sm text-text2 font-medium"
+          >
             <span className="w-1 h-1 rounded-full bg-border" />
             {t}
           </span>
@@ -170,14 +175,54 @@ function CompatStrip() {
   );
 }
 
+/* ─── Stats ─────────────────────────────────────────────────── */
+
+function Stats() {
+  const items = [
+    { value: "< 5 min", label: "Average generation time" },
+    { value: "100%", label: "Typed Python output" },
+    { value: "Free", label: "To start, no card needed" },
+  ];
+
+  return (
+    <section className="py-16 px-4 border-b border-border">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-10 text-center">
+        {items.map((item, i) => (
+          <div
+            key={item.label}
+            data-reveal
+            data-delay={String(i + 1) as "1" | "2" | "3"}
+            className="flex flex-col items-center gap-2"
+          >
+            <span
+              className="font-black text-text1 leading-none"
+              style={{ fontSize: "clamp(2.2rem,5vw,3.5rem)" }}
+            >
+              {item.value}
+            </span>
+            <span className="text-sm text-text2">{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* ─── Product preview ──────────────────────────────────────── */
 
 function ProductPreview() {
   return (
-    <section className="px-4 py-20">
+    <section className="px-4 py-24">
       <div className="max-w-5xl mx-auto" data-reveal>
+        <div className="mb-10 text-center">
+          <p className="section-label mb-3">Live demo</p>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight">
+            Watch the agent work
+          </h2>
+        </div>
+
         {/* Browser chrome */}
-        <div className="relative bg-surface border border-border rounded-2xl overflow-hidden">
+        <div className="relative bg-surface border border-border rounded-2xl overflow-hidden shadow-2xl">
           {/* Title bar */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2">
             <div className="flex gap-1.5">
@@ -199,21 +244,29 @@ function ProductPreview() {
             <div className="border-r border-border p-4 space-y-3">
               <p className="text-[10px] uppercase tracking-wider text-muted mb-4">Progress</p>
               {[
-                { label: "Code analysis", done: true  },
-                { label: "Exploring",     done: true  },
+                { label: "Code analysis", done: true },
+                { label: "Exploring",     done: true },
                 { label: "Analyzing",     active: true },
                 { label: "Generating",    done: false },
                 { label: "Done",          done: false },
               ].map((s) => (
                 <div key={s.label} className="flex items-center gap-2.5">
-                  <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
-                    s.done   ? "bg-success/20 border border-success/40 text-success" :
-                    s.active ? "bg-accent/20 border border-accent/40 text-accent animate-pulse" :
-                               "bg-surface-2 border border-border text-muted"
-                  }`}>
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
+                      s.done
+                        ? "bg-success/20 border border-success/40 text-success"
+                        : s.active
+                        ? "bg-accent/20 border border-accent/40 text-accent animate-pulse"
+                        : "bg-surface-2 border border-border text-muted"
+                    }`}
+                  >
                     {s.done ? "✓" : s.active ? "●" : "○"}
                   </div>
-                  <span className={s.done ? "text-text2" : s.active ? "text-text1" : "text-muted"}>
+                  <span
+                    className={
+                      s.done ? "text-text2" : s.active ? "text-text1" : "text-muted"
+                    }
+                  >
                     {s.label}
                   </span>
                 </div>
@@ -274,8 +327,12 @@ function ProductPreview() {
 function AgentBubble({ text }: { text: string }) {
   return (
     <div className="flex gap-2 items-start">
-      <div className="w-5 h-5 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-[8px] text-accent shrink-0 mt-0.5">A</div>
-      <div className="bg-surface border border-border rounded-xl rounded-tl-sm px-2.5 py-2 text-[10px] text-text2 leading-relaxed max-w-[200px]">{text}</div>
+      <div className="w-5 h-5 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-[8px] text-accent shrink-0 mt-0.5">
+        A
+      </div>
+      <div className="bg-surface border border-border rounded-xl rounded-tl-sm px-2.5 py-2 text-[10px] text-text2 leading-relaxed max-w-[200px]">
+        {text}
+      </div>
     </div>
   );
 }
@@ -283,7 +340,9 @@ function AgentBubble({ text }: { text: string }) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex gap-2 items-start justify-end">
-      <div className="bg-accent/15 border border-accent/20 rounded-xl rounded-tr-sm px-2.5 py-2 text-[10px] text-accent leading-relaxed max-w-[200px]">{text}</div>
+      <div className="bg-accent/15 border border-accent/20 rounded-xl rounded-tr-sm px-2.5 py-2 text-[10px] text-accent leading-relaxed max-w-[200px]">
+        {text}
+      </div>
     </div>
   );
 }
@@ -294,18 +353,24 @@ function HowItWorks() {
   return (
     <section id="how-it-works" className="py-24 px-4">
       <div className="max-w-5xl mx-auto">
-        <div data-reveal>
-          <Label>How it works</Label>
-          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center leading-tight mb-4">
+        <div data-reveal className="text-center mb-16">
+          <p className="section-label mb-3">How it works</p>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight mb-4">
             Three steps.<br />
             <span className="text-gradient-accent">One MCP server.</span>
           </h2>
-          <p className="text-text2 text-center max-w-xl mx-auto mb-16">
+          <p className="text-text2 max-w-xl mx-auto">
             No config files. No API docs to read. Just a URL.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Horizontal connector line on desktop */}
+          <div
+            aria-hidden
+            className="hidden md:block absolute top-[3.25rem] left-[calc(33.33%+1.5rem)] right-[calc(33.33%+1.5rem)] h-px bg-border"
+          />
+
           {[
             {
               n: "01",
@@ -333,16 +398,16 @@ function HowItWorks() {
               key={s.n}
               data-reveal
               data-delay={String(i + 1) as "1" | "2" | "3"}
-              className="card shine p-6 rounded-xl relative"
+              className="card shine p-7 rounded-2xl relative"
             >
-              <div className="flex items-center justify-between mb-5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent bg-accent/10 border border-accent/20">
-                  {s.icon}
-                </div>
-                <span className="font-mono text-4xl font-black text-border select-none">{s.n}</span>
+              <span className="font-mono font-black text-5xl text-border select-none block mb-5">
+                {s.n}
+              </span>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent bg-accent/10 border border-accent/20 mb-5">
+                {s.icon}
               </div>
               <h3 className="text-base font-bold text-text1 mb-2">{s.title}</h3>
-              <p className="text-sm text-text2 leading-relaxed mb-4">{s.body}</p>
+              <p className="text-sm text-text2 leading-relaxed mb-5">{s.body}</p>
               <span className="inline-flex items-center text-[11px] font-medium text-accent bg-accent/10 border border-accent/20 rounded-full px-2.5 py-1">
                 {s.tag}
               </span>
@@ -354,23 +419,177 @@ function HowItWorks() {
   );
 }
 
+/* ─── Code preview ──────────────────────────────────────────── */
+
+function CodePreview() {
+  return (
+    <section className="py-24 px-4 border-t border-border">
+      <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
+        {/* Left: description */}
+        <div data-reveal>
+          <p className="section-label mb-4">Output</p>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight mb-5">
+            Production-ready Python{" "}
+            <span className="text-gradient-accent">in seconds.</span>
+          </h2>
+          <p className="text-text2 leading-relaxed mb-8">
+            auto-mcp doesn&apos;t generate boilerplate—it generates a real,
+            typed MCP server with docstrings, auth, and a working config snippet.
+          </p>
+          <ul className="space-y-3">
+            {[
+              "Full type annotations",
+              "Auto-generated docstrings",
+              "Auth handled automatically",
+              "claude_desktop_config.json included",
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-3 text-sm text-text2">
+                <span className="w-5 h-5 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success text-[10px] shrink-0">
+                  ✓
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Right: terminal card */}
+        <div data-reveal data-delay="1">
+          <div className="card-elevated rounded-2xl overflow-hidden">
+            {/* Terminal chrome */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-danger/60" />
+                <div className="w-3 h-3 rounded-full bg-warn/60" />
+                <div className="w-3 h-3 rounded-full bg-success/60" />
+              </div>
+              <span className="text-xs text-muted font-mono ml-2">server.py</span>
+            </div>
+
+            {/* Code block */}
+            <div className="p-5 font-mono text-[11.5px] leading-relaxed overflow-x-auto bg-bg">
+              <pre className="whitespace-pre">
+                <CodeLine>
+                  <span className="text-muted"># auto-mcp generated · github.com/api</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-accent">from</span>
+                  <span className="text-text2"> mcp </span>
+                  <span className="text-accent">import</span>
+                  <span className="text-text2"> FastMCP</span>
+                </CodeLine>
+                <CodeLine>{""}</CodeLine>
+                <CodeLine>
+                  <span className="text-text2">mcp = FastMCP(</span>
+                  <span className="text-success">&quot;GitHub API&quot;</span>
+                  <span className="text-text2">)</span>
+                </CodeLine>
+                <CodeLine>{""}</CodeLine>
+                <CodeLine>
+                  <span className="text-accent">@mcp</span>
+                  <span className="text-text2">.tool()</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-accent">async def</span>
+                  <span className="text-text2"> list_repos(org: str, page: </span>
+                  <span className="text-accent">int</span>
+                  <span className="text-text2"> = 1) -&gt; list[dict]:</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-muted">&quot;&quot;&quot;List repositories for an organization.&quot;&quot;&quot;</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-accent">return await</span>
+                  <span className="text-text2"> api.get(</span>
+                  <span className="text-success">f&quot;/orgs/&#123;org&#125;/repos&quot;</span>
+                  <span className="text-text2">, page=page)</span>
+                </CodeLine>
+                <CodeLine>{""}</CodeLine>
+                <CodeLine>
+                  <span className="text-accent">@mcp</span>
+                  <span className="text-text2">.tool()</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-accent">async def</span>
+                  <span className="text-text2"> get_issue(owner: str, repo: str, number: </span>
+                  <span className="text-accent">int</span>
+                  <span className="text-text2">) -&gt; dict:</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-muted">&quot;&quot;&quot;Get a specific issue by number.&quot;&quot;&quot;</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-accent">return await</span>
+                  <span className="text-text2"> api.get(</span>
+                  <span className="text-success">f&quot;/repos/&#123;owner&#125;/&#123;repo&#125;/issues/&#123;number&#125;&quot;</span>
+                  <span className="text-text2">)</span>
+                </CodeLine>
+                <CodeLine>{""}</CodeLine>
+                <CodeLine>
+                  <span className="text-accent">@mcp</span>
+                  <span className="text-text2">.tool()</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-accent">async def</span>
+                  <span className="text-text2"> create_issue(owner: str, repo: str,</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">               title: str, body: str = </span>
+                  <span className="text-success">&quot;&quot;</span>
+                  <span className="text-text2">) -&gt; dict:</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-muted">&quot;&quot;&quot;Create a new issue in a repository.&quot;&quot;&quot;</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">    </span>
+                  <span className="text-accent">return await</span>
+                  <span className="text-text2"> api.post(</span>
+                  <span className="text-success">f&quot;/repos/&#123;owner&#125;/&#123;repo&#125;/issues&quot;</span>
+                  <span className="text-text2">,</span>
+                </CodeLine>
+                <CodeLine>
+                  <span className="text-text2">                          json=&#123;</span>
+                  <span className="text-success">&quot;title&quot;</span>
+                  <span className="text-text2">: title, </span>
+                  <span className="text-success">&quot;body&quot;</span>
+                  <span className="text-text2">: body&#125;)</span>
+                </CodeLine>
+              </pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CodeLine({ children }: { children: React.ReactNode }) {
+  return <div className="min-h-[1.5em]">{children}</div>;
+}
+
 /* ─── Bento features ────────────────────────────────────────── */
 
 function BentoFeatures() {
   return (
-    <section className="py-6 px-4">
+    <section className="py-16 px-4 border-t border-border">
       <div className="max-w-5xl mx-auto">
-        <div data-reveal>
-          <Label>Features</Label>
-          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-14">
+        <div data-reveal className="text-center mb-14">
+          <p className="section-label mb-3">Features</p>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1">
             Built for depth,<br />
             <span className="text-gradient-accent">not just breadth.</span>
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 grid-rows-[auto_auto] gap-4">
-
-          <div data-reveal data-delay="1" className="card shine p-6 md:col-span-3">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Code-aware analysis — col-span-3 */}
+          <div data-reveal data-delay="1" className="card shine p-6 rounded-2xl md:col-span-3">
             <div className="flex items-center gap-3 mb-4">
               <BentoIcon><CodeIcon /></BentoIcon>
               <div>
@@ -392,7 +611,8 @@ function BentoFeatures() {
             </div>
           </div>
 
-          <div data-reveal data-delay="2" className="card shine p-6 md:col-span-2">
+          {/* Privacy-first — col-span-2 */}
+          <div data-reveal data-delay="2" className="card shine p-6 rounded-2xl md:col-span-2">
             <BentoIcon><LockIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Privacy-first</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -402,14 +622,17 @@ function BentoFeatures() {
             <div className="mt-4 flex flex-col gap-1.5">
               {["Token never persisted", "ChromaDB runs locally", "No third-party data sharing"].map((t) => (
                 <div key={t} className="flex items-center gap-2 text-xs text-text2">
-                  <span className="w-4 h-4 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success text-[9px] shrink-0">✓</span>
+                  <span className="w-4 h-4 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success text-[9px] shrink-0">
+                    ✓
+                  </span>
                   {t}
                 </div>
               ))}
             </div>
           </div>
 
-          <div data-reveal data-delay="1" className="card shine p-6 md:col-span-2">
+          {/* Claude-ready output — col-span-2 */}
+          <div data-reveal data-delay="1" className="card shine p-6 rounded-2xl md:col-span-2">
             <BentoIcon><ZapIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Claude-ready output</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -419,7 +642,8 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div data-reveal data-delay="2" className="card shine p-6 md:col-span-2">
+          {/* Interactive agent — col-span-2 */}
+          <div data-reveal data-delay="2" className="card shine p-6 rounded-2xl md:col-span-2">
             <BentoIcon><ChatIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Interactive agent</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -429,7 +653,12 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div data-reveal data-delay="3" className="card shine p-6 md:col-span-1 flex flex-col justify-between">
+          {/* Any site — col-span-1 */}
+          <div
+            data-reveal
+            data-delay="3"
+            className="card shine p-6 rounded-2xl md:col-span-1 flex flex-col justify-between"
+          >
             <div>
               <BentoIcon><GlobeIcon /></BentoIcon>
               <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Any site</h3>
@@ -439,7 +668,6 @@ function BentoFeatures() {
             </div>
             <div className="mt-5 text-3xl font-black text-gradient-accent">∞</div>
           </div>
-
         </div>
       </div>
     </section>
@@ -450,22 +678,22 @@ function BentoFeatures() {
 
 function Pricing() {
   return (
-    <section id="pricing" className="py-24 px-4">
+    <section id="pricing" className="py-24 px-4 border-t border-border">
       <div className="max-w-4xl mx-auto">
-        <div data-reveal>
-          <Label>Pricing</Label>
-          <h2 className="mt-3 text-4xl sm:text-5xl font-extrabold text-text1 text-center mb-3">
+        <div data-reveal className="text-center mb-14">
+          <p className="section-label mb-3">Pricing</p>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 mb-3">
             Start free.<br />
             <span className="text-gradient-accent">Scale when you need to.</span>
           </h2>
-          <p className="text-center text-text2 mb-14 max-w-sm mx-auto">
+          <p className="text-text2 max-w-sm mx-auto">
             No contracts. No hidden fees. Cancel anytime.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Free */}
-          <div data-reveal data-delay="1" className="card p-7">
+          <div data-reveal data-delay="1" className="card p-7 rounded-2xl">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-5">Free</p>
             <div className="flex items-end gap-1.5 mb-1">
               <span className="text-5xl font-black text-text1">$0</span>
@@ -481,10 +709,18 @@ function Pricing() {
                 ["Priority queue", false],
               ].map(([label, ok]) => (
                 <li key={String(label)} className="flex items-center gap-3 text-sm">
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 ${
-                    ok ? "bg-success/15 border border-success/30 text-success" : "bg-surface-2 border border-border text-muted"
-                  }`}>{ok ? "✓" : "–"}</span>
-                  <span className={ok ? "text-text2" : "text-muted line-through"}>{String(label)}</span>
+                  <span
+                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 ${
+                      ok
+                        ? "bg-success/15 border border-success/30 text-success"
+                        : "bg-surface-2 border border-border text-muted"
+                    }`}
+                  >
+                    {ok ? "✓" : "–"}
+                  </span>
+                  <span className={ok ? "text-text2" : "text-muted line-through"}>
+                    {String(label)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -500,12 +736,9 @@ function Pricing() {
           <div
             data-reveal
             data-delay="2"
-            className="relative rounded-xl p-7 bg-surface border border-accent/30"
-            style={{ boxShadow: "0 0 0 1px rgba(99,102,241,0.08), 0 0 40px rgba(0,0,0,0.4)" }}
+            className="card-elevated relative p-7 rounded-2xl border border-accent/30"
           >
-            <div
-              className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap bg-accent"
-            >
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-bg whitespace-nowrap bg-accent">
               Most popular
             </div>
 
@@ -526,7 +759,9 @@ function Pricing() {
                 "Email support",
               ].map((label) => (
                 <li key={label} className="flex items-center gap-3 text-sm">
-                  <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] bg-success/15 border border-success/30 text-success shrink-0">✓</span>
+                  <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] bg-success/15 border border-success/30 text-success shrink-0">
+                    ✓
+                  </span>
                   <span className="text-text2">{label}</span>
                 </li>
               ))}
@@ -555,21 +790,25 @@ function Pricing() {
 
 function CtaBanner() {
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-20">
       <div className="max-w-4xl mx-auto" data-reveal>
-        <div className="relative rounded-2xl overflow-hidden p-12 text-center bg-surface border border-border"
-          style={{ boxShadow: "0 0 60px rgba(0,0,0,0.4)" }}
-        >
-          {/* Subtle indigo glow */}
-          <div aria-hidden className="absolute inset-0 pointer-events-none"
-            style={{ background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%)" }} />
+        <div className="relative rounded-2xl overflow-hidden p-14 text-center bg-surface border border-border">
+          {/* Subtle accent radial glow */}
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 60% at 50% 0%, rgb(var(--accent-rgb) / 0.08) 0%, transparent 70%)",
+            }}
+          />
           <div className="relative z-10">
-            <h2 className="text-4xl sm:text-5xl font-extrabold mb-4">
-              <span className="text-text1">Your first MCP server</span>
+            <h2 className="text-4xl sm:text-5xl font-extrabold mb-5">
+              <span className="text-text1">Your first MCP server is</span>
               <br />
-              <span className="text-gradient-accent">is three minutes away.</span>
+              <span className="text-gradient-accent">three minutes away.</span>
             </h2>
-            <p className="text-text2 mb-8 max-w-lg mx-auto">
+            <p className="text-text2 mb-9 max-w-lg mx-auto">
               No config. No API docs. Just a URL and a download.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -597,14 +836,6 @@ function CtaBanner() {
 
 /* ─── Shared helpers ────────────────────────────────────────── */
 
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-accent mb-1">
-      {children}
-    </p>
-  );
-}
-
 function BentoIcon({ children }: { children: React.ReactNode }) {
   return (
     <div className="inline-flex w-9 h-9 rounded-xl items-center justify-center text-accent bg-accent/10 border border-accent/20">
@@ -614,17 +845,84 @@ function BentoIcon({ children }: { children: React.ReactNode }) {
 }
 
 function TermRow({ children, color }: { children: React.ReactNode; color: string }) {
-  return <div className={`flex gap-2 ${color}`}><span className="opacity-0 select-none">$</span><span>{children}</span></div>;
+  return (
+    <div className={`flex gap-2 ${color}`}>
+      <span className="opacity-0 select-none">$</span>
+      <span>{children}</span>
+    </div>
+  );
 }
 
 /* ─── Icons ─────────────────────────────────────────────────── */
 
-function StepLinkIcon() { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>; }
-function StepBotIcon()  { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15m-6.3-11.896c.251.023.501.05.75.082M19.8 15l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.607L5 14.5m14.8.5l-1.249 3.124M5 14.5L3.751 17.624m0 0A3 3 0 006.75 21h10.5a3 3 0 002.999-3.376l-.249-3" /></svg>; }
-function StepDownIcon() { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>; }
-function CodeIcon()    { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>; }
-function LockIcon()    { return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>; }
-function ZapIcon()     { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>; }
-function ChatIcon()    { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" /></svg>; }
-function GlobeIcon()   { return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" /></svg>; }
-function GithubIcon()  { return <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>; }
+function StepLinkIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  );
+}
+
+function StepBotIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15m-6.3-11.896c.251.023.501.05.75.082M19.8 15l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.607L5 14.5m14.8.5l-1.249 3.124M5 14.5L3.751 17.624m0 0A3 3 0 006.75 21h10.5a3 3 0 002.999-3.376l-.249-3" />
+    </svg>
+  );
+}
+
+function StepDownIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  );
+}
+
+function CodeIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+    </svg>
+  );
+}
+
+function ZapIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+    </svg>
+  );
+}
+
+function GithubIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
