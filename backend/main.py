@@ -153,6 +153,10 @@ class UserMessageRequest(BaseModel):
     text: str
 
 
+class PatchRequest(BaseModel):
+    description: str
+
+
 class CreateJobResponse(BaseModel):
     job_id: str
 
@@ -356,6 +360,59 @@ async def download_mcp(request: Request, job_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename=\"{safe_filename}\""},
     )
+
+
+# --------------------------------------------------------------------------- #
+# MCP patch — add a missing tool after generation is done
+# --------------------------------------------------------------------------- #
+
+@app.post("/api/jobs/{job_id}/patch")
+@limiter.limit("10/minute")
+async def patch_mcp(request: Request, job_id: str, body: PatchRequest):
+    """Generate and add one new tool to an already-generated MCP server."""
+    _require_valid_job_id(job_id)
+
+    if not body.description.strip():
+        raise HTTPException(status_code=400, detail="Description cannot be empty.")
+    if len(body.description) > 2000:
+        raise HTTPException(status_code=400, detail="Description too long (max 2000 chars).")
+
+    spec_path = RUNS_DIR / job_id / "feature_spec.json"
+    if not spec_path.exists():
+        raise HTTPException(status_code=404, detail="No feature spec found for this job.")
+
+    spec = json.loads(spec_path.read_text())
+
+    import asyncio as _asyncio
+    loop = _asyncio.get_running_loop()
+
+    try:
+        from generator.patch import patch_spec
+        from generator.generate import generate
+
+        updated_spec, new_feature = await loop.run_in_executor(
+            None, lambda: patch_spec(spec, body.description.strip())
+        )
+
+        spec_path.write_text(json.dumps(updated_spec, indent=2))
+
+        server_dir = RUNS_DIR / job_id / "mcp_server"
+        user_env: dict | None = None
+        env_file = RUNS_DIR / job_id / "user_env.json"
+        if env_file.exists():
+            try:
+                user_env = json.loads(env_file.read_text())
+            except Exception:
+                pass
+
+        await loop.run_in_executor(None, generate, updated_spec, server_dir, user_env)
+
+        return {"feature": new_feature, "total_features": len(updated_spec["features"])}
+
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Patch failed: {exc}")
 
 
 # --------------------------------------------------------------------------- #
