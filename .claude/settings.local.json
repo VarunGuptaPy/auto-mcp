@@ -31,7 +31,8 @@
       "Bash(npx next *)",
       "Bash(grep \"^\\\\.env$\" /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/.gitignore)",
       "Bash(git *)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "WebFetch(domain:dodopayments.com)"
     ]
   }
 }

@@ -10,7 +10,7 @@ export default function Footer() {
             <div className="flex items-center gap-2 mb-3">
               <span
                 className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: "linear-gradient(135deg, #9d8fff, #e879f9)" }}
+                style={{ background: "#6366f1" }}
               >
                 A
               </span>

@@ -329,7 +329,7 @@ export default function JobPage() {
           </div>
 
           {/* Reasoning */}
-          <div className="bg-[#0f0f17] border border-border rounded-lg p-4">
+          <div className="bg-surface border border-border rounded-lg p-4">
             <p className="text-[11px] uppercase tracking-wider text-muted mb-2">Agent reasoning</p>
             <p className={`text-sm leading-relaxed ${reasoning ? "text-text1" : "text-muted italic"}`}>
               {reasoning || "Waiting for first step…"}
@@ -337,7 +337,7 @@ export default function JobPage() {
           </div>
 
           {/* Endpoints — collapsible */}
-          <details className="bg-[#0f0f17] border border-border rounded-lg overflow-hidden">
+          <details className="bg-surface border border-border rounded-lg overflow-hidden">
             <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-white/[0.02] transition-colors">
               <span className="text-[11px] uppercase tracking-wider text-muted">Captured endpoints</span>
               <span className="font-mono text-xs text-accent bg-accent/10 border border-accent/20 rounded px-1.5 py-0.5">
@@ -354,7 +354,7 @@ export default function JobPage() {
                       <p className="font-mono text-[11px] text-muted uppercase tracking-wider mb-2">{host}</p>
                       <ul className="space-y-1">
                         {eps.map((ep, i) => (
-                          <li key={i} className="flex items-start gap-2 py-1 border-b border-[#1a1a1a] last:border-0">
+                          <li key={i} className="flex items-start gap-2 py-1 border-b border-border last:border-0">
                             <MethodPill method={ep.method} />
                             <span className="font-mono text-xs text-text1 break-all">{ep.path}</span>
                           </li>

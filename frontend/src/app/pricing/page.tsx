@@ -118,7 +118,7 @@ export default function PricingPage() {
                     ? "bg-accent/10 border-accent/40"
                     : "bg-surface border-border"
                 }`}
-                style={isPrimary ? { boxShadow: "0 0 0 1px rgba(124,106,247,0.2), 0 0 40px rgba(124,106,247,0.1)" } : {}}
+                style={isPrimary ? { boxShadow: "0 0 0 1px rgba(99,102,241,0.2), 0 0 40px rgba(99,102,241,0.08)" } : {}}
               >
                 {p.badge && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-accent text-white text-xs font-semibold rounded-full whitespace-nowrap">

@@ -5,49 +5,54 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg:          "#08070e",
-        surface:     "#0f0d1a",
-        "surface-2": "#171525",
-        border:      "#221f38",
-        "border-b":  "#2e2952",
-        muted:       "#4e4c6a",
-        text1:       "#eeedf2",
-        text2:       "#9896b0",
-        accent:      "#9d8fff",
-        "accent-h":  "#b8adff",
-        pink:        "#e879f9",
-        success:     "#34d399",
-        warn:        "#fbbf24",
-        danger:      "#f87171",
+        // ── Neutrals (zinc scale — no purple tint) ──────────────
+        bg:          "#09090b",   // zinc-950
+        surface:     "#111113",   // slightly lifted black
+        "surface-2": "#18181b",   // zinc-900
+        border:      "#27272a",   // zinc-800
+        "border-sub":"#3f3f46",   // zinc-700
+        muted:       "#71717a",   // zinc-500
+        text1:       "#fafafa",   // zinc-50
+        text2:       "#a1a1aa",   // zinc-400
+        // ── Accent (indigo — professional, developer-facing) ─────
+        accent:      "#6366f1",   // indigo-500
+        "accent-h":  "#818cf8",   // indigo-400
+        "accent-bg": "#1e1b4b",   // deep indigo tint for backgrounds
+        // ── Semantic ─────────────────────────────────────────────
+        success:     "#22c55e",
+        warn:        "#eab308",
+        danger:      "#ef4444",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains)", "monospace"],
       },
       backgroundImage: {
-        "hero-glow":
-          "radial-gradient(ellipse 90% 55% at 50% 0%, rgba(157,143,255,0.22) 0%, rgba(232,121,249,0.06) 45%, transparent 70%)",
-        "grid-faint":
-          "linear-gradient(rgba(157,143,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(157,143,255,0.04) 1px,transparent 1px)",
+        "dot-grid":
+          "radial-gradient(circle, #27272a 1px, transparent 1px)",
+        "hero-gradient":
+          "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.15) 0%, transparent 65%)",
         "card-shine":
-          "linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%)",
-        "gradient-accent":
-          "linear-gradient(135deg, #9d8fff 0%, #c084fc 50%, #e879f9 100%)",
+          "linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%)",
       },
       keyframes: {
-        spin:      { to: { transform: "rotate(360deg)" } },
-        pulse:     { "0%,100%": { opacity: "1" }, "50%": { opacity: "0.4" } },
-        marquee:   { "0%": { transform: "translateX(0%)" }, "100%": { transform: "translateX(-50%)" } },
-        "fade-in": { from: { opacity: "0", transform: "translateY(12px)" }, to: { opacity: "1", transform: "translateY(0)" } },
-        flicker:   { "0%,100%": { opacity: "1" }, "50%": { opacity: "0.6" } },
-        "border-spin": { to: { "--angle": "360deg" } },
+        spin:       { to: { transform: "rotate(360deg)" } },
+        pulse:      { "0%,100%": { opacity: "1" }, "50%": { opacity: "0.4" } },
+        marquee:    { "0%": { transform: "translateX(0%)" }, "100%": { transform: "translateX(-50%)" } },
+        "fade-up":  { from: { opacity: "0", transform: "translateY(16px)" }, to: { opacity: "1", transform: "translateY(0)" } },
+        "fade-in":  { from: { opacity: "0" }, to: { opacity: "1" } },
       },
       animation: {
         spin:      "spin 0.75s linear infinite",
         pulse:     "pulse 1.4s ease-in-out infinite",
-        marquee:   "marquee 28s linear infinite",
-        "fade-in": "fade-in 0.55s ease-out both",
-        flicker:   "flicker 3s ease-in-out infinite",
+        marquee:   "marquee 30s linear infinite",
+        "fade-up": "fade-up 0.5s cubic-bezier(0.16,1,0.3,1) both",
+        "fade-in": "fade-in 0.4s ease both",
+      },
+      boxShadow: {
+        card:    "0 1px 3px 0 rgba(0,0,0,0.4), 0 1px 2px -1px rgba(0,0,0,0.4)",
+        "card-hover": "0 4px 24px 0 rgba(0,0,0,0.5), 0 1px 3px 0 rgba(0,0,0,0.3)",
+        "glow-sm": "0 0 0 1px rgba(99,102,241,0.3), 0 0 20px rgba(99,102,241,0.08)",
       },
     },
   },

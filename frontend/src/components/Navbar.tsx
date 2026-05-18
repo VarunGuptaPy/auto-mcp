@@ -32,7 +32,7 @@ export default function Navbar() {
         <Link href="/" className="font-mono text-[15px] font-bold shrink-0 flex items-center gap-1.5">
           <span
             className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black text-white"
-            style={{ background: "#9d8fff" }}
+            style={{ background: "#6366f1" }}
           >
             A
           </span>
@@ -85,7 +85,7 @@ export default function Navbar() {
                 ) : (
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                    style={{ background: "#9d8fff" }}
+                    style={{ background: "#6366f1" }}
                   >
                     {(user.displayName ?? user.email ?? "U")[0].toUpperCase()}
                   </div>

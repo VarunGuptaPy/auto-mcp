@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/lib/auth-context";
@@ -27,72 +27,10 @@ function useScrollReveal() {
   }, []);
 }
 
-/* ─── 3-D card tilt ─────────────────────────────────────────── */
-
-function useTilt() {
-  useEffect(() => {
-    const cards = document.querySelectorAll<HTMLElement>("[data-tilt]");
-
-    function onMove(this: HTMLElement, e: Event) {
-      const me = e as MouseEvent;
-      const rect = this.getBoundingClientRect();
-      const x = (me.clientX - rect.left) / rect.width - 0.5;
-      const y = (me.clientY - rect.top) / rect.height - 0.5;
-      this.style.transform = `perspective(800px) rotateY(${x * 9}deg) rotateX(${-y * 9}deg) scale(1.025)`;
-    }
-    function onLeave(this: HTMLElement) {
-      this.style.transform = "";
-    }
-
-    cards.forEach((c) => {
-      c.addEventListener("mousemove", onMove);
-      c.addEventListener("mouseleave", onLeave);
-    });
-    return () => {
-      cards.forEach((c) => {
-        c.removeEventListener("mousemove", onMove);
-        c.removeEventListener("mouseleave", onLeave);
-      });
-    };
-  }, []);
-}
-
-/* ─── Typewriter ────────────────────────────────────────────── */
-
-function Typewriter({ text, startDelay = 600 }: { text: string; startDelay?: number }) {
-  const [shown, setShown] = useState(0);
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const id = setInterval(() => {
-        setShown((n) => {
-          if (n >= text.length) {
-            clearInterval(id);
-            setTimeout(() => setDone(true), 1400);
-            return n;
-          }
-          return n + 1;
-        });
-      }, 65);
-      return () => clearInterval(id);
-    }, startDelay);
-    return () => clearTimeout(t);
-  }, [text, startDelay]);
-
-  return (
-    <>
-      {text.slice(0, shown)}
-      {!done && <span className="cursor-blink inline-block w-[3px] ml-0.5 align-middle" style={{ height: "0.85em", background: "currentColor" }} />}
-    </>
-  );
-}
-
 /* ═══════════════════════════════════════════════════════════ */
 
 export default function LandingPage() {
   useScrollReveal();
-  useTilt();
 
   return (
     <div className="flex flex-col min-h-screen overflow-x-hidden">
@@ -117,38 +55,6 @@ function Hero() {
   const { user } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState("");
-  const heroRef = useRef<HTMLElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  /* Smooth lerped mouse parallax */
-  useEffect(() => {
-    const hero = heroRef.current;
-    const content = contentRef.current;
-    if (!hero || !content) return;
-
-    let raf: number;
-    let tx = 0, ty = 0, cx = 0, cy = 0;
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-    function onMove(e: MouseEvent) {
-      const r = hero!.getBoundingClientRect();
-      tx = (e.clientX - r.left - r.width / 2) * 0.022;
-      ty = (e.clientY - r.top - r.height / 2) * 0.014;
-    }
-    function frame() {
-      cx = lerp(cx, tx, 0.07);
-      cy = lerp(cy, ty, 0.07);
-      content!.style.transform = `translate(${cx}px, ${cy}px)`;
-      raf = requestAnimationFrame(frame);
-    }
-
-    hero.addEventListener("mousemove", onMove);
-    raf = requestAnimationFrame(frame);
-    return () => {
-      hero.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
 
   function go(e: React.FormEvent) {
     e.preventDefault();
@@ -157,66 +63,29 @@ function Hero() {
     router.push(`${dest}&url=${encodeURIComponent(url.trim())}`);
   }
 
-  const floatingDots = [
-    { x: "7%",  y: "22%", s: 8,  c: "rgba(157,143,255,0.45)", cls: "animate-float-slow",   d: "0s"   },
-    { x: "88%", y: "18%", s: 6,  c: "rgba(232,121,249,0.35)", cls: "animate-float-medium", d: "2s"   },
-    { x: "82%", y: "70%", s: 10, c: "rgba(157,143,255,0.25)", cls: "animate-float-slow",   d: "4s"   },
-    { x: "13%", y: "76%", s: 5,  c: "rgba(232,121,249,0.4)",  cls: "animate-float-medium", d: "1s"   },
-    { x: "47%", y: "7%",  s: 4,  c: "rgba(157,143,255,0.5)",  cls: "animate-float-fast",   d: "3s"   },
-    { x: "93%", y: "48%", s: 6,  c: "rgba(157,143,255,0.3)",  cls: "animate-float-fast",   d: "5s"   },
-    { x: "2%",  y: "52%", s: 4,  c: "rgba(232,121,249,0.25)", cls: "animate-float-slow",   d: "6s"   },
-    { x: "55%", y: "87%", s: 7,  c: "rgba(157,143,255,0.35)", cls: "animate-float-medium", d: "2.5s" },
-    { x: "30%", y: "12%", s: 3,  c: "rgba(232,121,249,0.3)",  cls: "animate-float-fast",   d: "7s"   },
-    { x: "70%", y: "85%", s: 5,  c: "rgba(157,143,255,0.2)",  cls: "animate-float-slow",   d: "3.5s" },
-  ];
-
   return (
-    <section
-      ref={heroRef}
-      className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 pt-10 pb-20 text-center overflow-hidden"
-    >
+    <section className="relative min-h-[88vh] flex flex-col items-center justify-center px-4 pt-10 pb-20 text-center overflow-hidden">
       {/* Dot grid */}
       <div
         aria-hidden
-        className="absolute inset-0 pointer-events-none opacity-[0.35]"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage:
-            "radial-gradient(circle, rgba(157,143,255,0.2) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(circle, #27272a 1px, transparent 1px)",
           backgroundSize: "44px 44px",
+          opacity: 0.5,
+        }}
+      />
+      {/* Radial gradient glow */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 65%)",
         }}
       />
 
-      {/* Slowly rotating orbital rings */}
-      <div
-        aria-hidden
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
-      >
-        <div
-          className="w-[680px] h-[680px] rounded-full animate-spin-slow"
-          style={{ border: "1px solid rgba(157,143,255,0.07)" }}
-        />
-        <div
-          className="absolute inset-14 rounded-full animate-spin-slow-rev"
-          style={{ border: "1px solid rgba(232,121,249,0.05)" }}
-        />
-        <div
-          className="absolute inset-28 rounded-full animate-spin-slow"
-          style={{ border: "1px solid rgba(157,143,255,0.06)", animationDuration: "30s" }}
-        />
-      </div>
-
-      {/* Floating geometric dots */}
-      {floatingDots.map((d, i) => (
-        <div
-          key={i}
-          aria-hidden
-          className={`absolute rounded-full pointer-events-none ${d.cls}`}
-          style={{ left: d.x, top: d.y, width: d.s, height: d.s, background: d.c, animationDelay: d.d }}
-        />
-      ))}
-
-      {/* Parallax content layer */}
-      <div ref={contentRef} className="relative z-10 max-w-4xl mx-auto" style={{ willChange: "transform" }}>
+      <div className="relative z-10 max-w-4xl mx-auto">
         {/* Eyebrow badge */}
         <div className="animate-fade-in inline-flex items-center gap-2.5 mb-7 px-3.5 py-1.5 rounded-full border border-accent/25 bg-accent/10 text-xs font-medium">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
@@ -229,9 +98,7 @@ function Hero() {
         <h1 className="animate-fade-in-d1 text-[clamp(2.6rem,7vw,5.5rem)] font-extrabold tracking-tight leading-[1.04] mb-6">
           <span className="text-text1">Every website</span>
           <br />
-          <span className="text-gradient-accent">
-            <Typewriter text="is an API." startDelay={700} />
-          </span>
+          <span className="text-gradient-accent">is an API.</span>
           <br />
           <span className="text-text1">Now your AI knows it.</span>
         </h1>
@@ -282,11 +149,10 @@ function CompatStrip() {
 
   return (
     <div className="relative border-y border-border py-4 overflow-hidden">
-      {/* Edge fades — functional mask for the marquee */}
       <div className="absolute inset-y-0 left-0 w-20 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(90deg, #08070e, transparent)" }} />
+        style={{ background: "linear-gradient(90deg, #09090b, transparent)" }} />
       <div className="absolute inset-y-0 right-0 w-20 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(-90deg, #08070e, transparent)" }} />
+        style={{ background: "linear-gradient(-90deg, #09090b, transparent)" }} />
 
       <p className="text-center text-[10px] uppercase tracking-[0.2em] text-muted mb-3">
         Works with every MCP-compatible client
@@ -311,16 +177,16 @@ function ProductPreview() {
     <section className="px-4 py-20">
       <div className="max-w-5xl mx-auto" data-reveal>
         {/* Browser chrome */}
-        <div className="relative border-gradient rounded-2xl overflow-hidden" style={{ background: "#0f0d1a" }}>
+        <div className="relative bg-surface border border-border rounded-2xl overflow-hidden">
           {/* Title bar */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2/60">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2">
             <div className="flex gap-1.5">
               <div className="w-3 h-3 rounded-full bg-danger/50" />
               <div className="w-3 h-3 rounded-full bg-warn/50" />
               <div className="w-3 h-3 rounded-full bg-success/50" />
             </div>
             <div className="flex-1 flex justify-center">
-              <div className="flex items-center gap-2 bg-surface border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-64">
+              <div className="flex items-center gap-2 bg-bg border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-64">
                 <LockIcon />
                 auto-mcp.dev/jobs/f7a2c1
               </div>
@@ -343,7 +209,7 @@ function ProductPreview() {
                   <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
                     s.done   ? "bg-success/20 border border-success/40 text-success" :
                     s.active ? "bg-accent/20 border border-accent/40 text-accent animate-pulse" :
-                               "bg-border border border-border text-muted"
+                               "bg-surface-2 border border-border text-muted"
                   }`}>
                     {s.done ? "✓" : s.active ? "●" : "○"}
                   </div>
@@ -361,31 +227,31 @@ function ProductPreview() {
 
             {/* Center: screenshot area */}
             <div className="border-r border-border p-4 flex flex-col gap-3">
-              <div className="flex-1 bg-black/60 rounded-lg overflow-hidden relative">
+              <div className="flex-1 bg-bg rounded-lg overflow-hidden relative border border-border">
                 <div className="absolute inset-0 flex flex-col">
-                  <div className="h-7 bg-[#1a1a2e] border-b border-border/50 flex items-center px-3 gap-2">
-                    <div className="w-16 h-2 bg-surface-2 rounded" />
-                    <div className="w-24 h-2 bg-surface-2 rounded" />
+                  <div className="h-7 bg-surface-2 border-b border-border flex items-center px-3 gap-2">
+                    <div className="w-16 h-2 bg-border rounded" />
+                    <div className="w-24 h-2 bg-border rounded" />
                   </div>
                   <div className="flex-1 p-3 space-y-2">
                     {[70, 45, 90, 55, 80].map((w, i) => (
-                      <div key={i} className="h-2 rounded" style={{ width: `${w}%`, background: "#221f38" }} />
+                      <div key={i} className="h-2 rounded bg-surface-2" style={{ width: `${w}%` }} />
                     ))}
                   </div>
                 </div>
-                <div className="absolute top-2 right-2 text-[9px] font-mono bg-black/70 border border-border rounded px-1.5 py-0.5 text-text2">
+                <div className="absolute top-2 right-2 text-[9px] font-mono bg-surface border border-border rounded px-1.5 py-0.5 text-text2">
                   step 18/24
                 </div>
               </div>
 
-              <div className="bg-surface-2/60 border border-border rounded-lg p-3">
+              <div className="bg-surface-2 border border-border rounded-lg p-3">
                 <p className="text-[9px] uppercase tracking-wider text-muted mb-1.5">Agent reasoning</p>
                 <p className="text-[11px] text-text2 leading-relaxed line-clamp-2">
                   Clicking &quot;View item&quot; button → navigating to /items/42 → capturing GET /api/items/42 endpoint with auth header
                 </p>
               </div>
 
-              <div className="bg-surface-2/60 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
+              <div className="bg-surface-2 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-wider text-muted">Endpoints captured</span>
                 <span className="text-accent font-mono font-bold text-sm">12</span>
               </div>
@@ -467,12 +333,10 @@ function HowItWorks() {
               key={s.n}
               data-reveal
               data-delay={String(i + 1) as "1" | "2" | "3"}
-              data-tilt
-              className="border-gradient shine p-6 rounded-2xl relative"
+              className="card shine p-6 rounded-xl relative"
             >
               <div className="flex items-center justify-between mb-5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent"
-                  style={{ background: "rgba(157,143,255,0.12)", border: "1px solid rgba(157,143,255,0.2)" }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent bg-accent/10 border border-accent/20">
                   {s.icon}
                 </div>
                 <span className="font-mono text-4xl font-black text-border select-none">{s.n}</span>
@@ -506,7 +370,7 @@ function BentoFeatures() {
 
         <div className="grid grid-cols-1 md:grid-cols-5 grid-rows-[auto_auto] gap-4">
 
-          <div data-reveal data-delay="1" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-3">
+          <div data-reveal data-delay="1" className="card shine p-6 md:col-span-3">
             <div className="flex items-center gap-3 mb-4">
               <BentoIcon><CodeIcon /></BentoIcon>
               <div>
@@ -528,7 +392,7 @@ function BentoFeatures() {
             </div>
           </div>
 
-          <div data-reveal data-delay="2" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="2" className="card shine p-6 md:col-span-2">
             <BentoIcon><LockIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Privacy-first</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -545,7 +409,7 @@ function BentoFeatures() {
             </div>
           </div>
 
-          <div data-reveal data-delay="1" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="1" className="card shine p-6 md:col-span-2">
             <BentoIcon><ZapIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Claude-ready output</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -555,7 +419,7 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div data-reveal data-delay="2" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-2">
+          <div data-reveal data-delay="2" className="card shine p-6 md:col-span-2">
             <BentoIcon><ChatIcon /></BentoIcon>
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Interactive agent</h3>
             <p className="text-sm text-text2 leading-relaxed">
@@ -565,7 +429,7 @@ function BentoFeatures() {
             </p>
           </div>
 
-          <div data-reveal data-delay="3" data-tilt className="border-gradient shine rounded-2xl p-6 md:col-span-1 flex flex-col justify-between">
+          <div data-reveal data-delay="3" className="card shine p-6 md:col-span-1 flex flex-col justify-between">
             <div>
               <BentoIcon><GlobeIcon /></BentoIcon>
               <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Any site</h3>
@@ -618,7 +482,7 @@ function Pricing() {
               ].map(([label, ok]) => (
                 <li key={String(label)} className="flex items-center gap-3 text-sm">
                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 ${
-                    ok ? "bg-success/15 border border-success/30 text-success" : "bg-border border border-border text-muted"
+                    ok ? "bg-success/15 border border-success/30 text-success" : "bg-surface-2 border border-border text-muted"
                   }`}>{ok ? "✓" : "–"}</span>
                   <span className={ok ? "text-text2" : "text-muted line-through"}>{String(label)}</span>
                 </li>
@@ -636,16 +500,11 @@ function Pricing() {
           <div
             data-reveal
             data-delay="2"
-            className="relative rounded-2xl p-7"
-            style={{
-              background: "#0f0d1a",
-              border: "1px solid rgba(157,143,255,0.35)",
-              boxShadow: "0 0 0 1px rgba(157,143,255,0.08), 0 0 48px rgba(0,0,0,0.5)",
-            }}
+            className="relative rounded-xl p-7 bg-surface border border-accent/30"
+            style={{ boxShadow: "0 0 0 1px rgba(99,102,241,0.08), 0 0 40px rgba(0,0,0,0.4)" }}
           >
             <div
-              className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap"
-              style={{ background: "#9d8fff" }}
+              className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap bg-accent"
             >
               Most popular
             </div>
@@ -698,14 +557,12 @@ function CtaBanner() {
   return (
     <section className="px-4 py-16">
       <div className="max-w-4xl mx-auto" data-reveal>
-        <div
-          className="relative rounded-3xl overflow-hidden p-12 text-center"
-          style={{
-            background: "#0f0d1a",
-            border: "1px solid rgba(157,143,255,0.2)",
-            boxShadow: "0 0 80px rgba(0,0,0,0.6)",
-          }}
+        <div className="relative rounded-2xl overflow-hidden p-12 text-center bg-surface border border-border"
+          style={{ boxShadow: "0 0 60px rgba(0,0,0,0.4)" }}
         >
+          {/* Subtle indigo glow */}
+          <div aria-hidden className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%)" }} />
           <div className="relative z-10">
             <h2 className="text-4xl sm:text-5xl font-extrabold mb-4">
               <span className="text-text1">Your first MCP server</span>
@@ -726,7 +583,7 @@ function CtaBanner() {
                 href="https://github.com/VarunGuptaPy/auto-mcp"
                 target="_blank"
                 rel="noreferrer"
-                className="px-8 py-3.5 rounded-xl font-bold text-text1 text-[15px] border border-border bg-surface hover:bg-surface-2 transition-colors flex items-center justify-center gap-2"
+                className="px-8 py-3.5 rounded-xl font-semibold text-text1 text-[15px] border border-border bg-bg hover:bg-surface transition-colors flex items-center justify-center gap-2"
               >
                 <GithubIcon /> Star on GitHub
               </a>
@@ -750,13 +607,7 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function BentoIcon({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="inline-flex w-9 h-9 rounded-xl items-center justify-center text-accent"
-      style={{
-        background: "rgba(157,143,255,0.1)",
-        border: "1px solid rgba(157,143,255,0.2)",
-      }}
-    >
+    <div className="inline-flex w-9 h-9 rounded-xl items-center justify-center text-accent bg-accent/10 border border-accent/20">
       {children}
     </div>
   );
