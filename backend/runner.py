@@ -69,7 +69,14 @@ async def run_job(
         )
 
     async def on_question(question_id: str, text: str, question_type: str, choices: list):
-        return await _ask(question_id, text, question_type, choices=choices)
+        answer = await _ask(question_id, text, question_type, choices=choices)
+        # File upload: frontend returns a relative path like "uploads/uuid.jpg".
+        # Playwright's set_input_files needs an absolute path — resolve it now.
+        if question_type == "file_upload" and answer and not Path(answer).is_absolute():
+            candidate = job_dir / answer
+            if candidate.exists():
+                return str(candidate)
+        return answer
 
     def get_user_messages() -> list[str]:
         return manager.pop_user_messages(job_id)
