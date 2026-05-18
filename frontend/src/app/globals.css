@@ -144,6 +144,29 @@ html.dark {
       radial-gradient(ellipse 65% 90% at 105% -5%, rgba(76,29,149,0.14) 0%, transparent 55%);
   }
 
+  /* Square grid background — neutral, very subtle */
+  .section-grid {
+    background-image:
+      linear-gradient(rgb(var(--text1-rgb) / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--text1-rgb) / 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* Square grid background — accent-tinted (for CTA section) */
+  .cta-grid {
+    background-color: rgb(var(--accent-rgb) / 0.05);
+    background-image:
+      linear-gradient(rgb(var(--accent-rgb) / 0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--accent-rgb) / 0.13) 1px, transparent 1px);
+    background-size: 36px 36px;
+  }
+  html.dark .cta-grid {
+    background-color: rgb(var(--accent-rgb) / 0.04);
+    background-image:
+      linear-gradient(rgb(var(--accent-rgb) / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--accent-rgb) / 0.08) 1px, transparent 1px);
+  }
+
   /* Marquee edge fades (theme-adaptive) */
   .marquee-fade-l {
     background: linear-gradient(to right, var(--bg) 0%, transparent 100%);

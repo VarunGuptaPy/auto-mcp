@@ -2,10 +2,45 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/lib/auth-context";
+
+/* ─── Cursor glow ───────────────────────────────────────────── */
+
+function CursorGlow() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onMove = (e: MouseEvent) => {
+      el.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className="pointer-events-none fixed top-0 left-0 z-[1] will-change-transform"
+      style={{
+        width: 600,
+        height: 600,
+        marginLeft: -300,
+        marginTop: -300,
+        borderRadius: "50%",
+        background:
+          "radial-gradient(circle, rgb(var(--accent-rgb) / 0.13) 0%, rgb(var(--accent-rgb) / 0.04) 40%, transparent 70%)",
+        filter: "blur(48px)",
+        transition: "transform 0.18s cubic-bezier(0.22,1,0.36,1)",
+      }}
+    />
+  );
+}
 
 /* ─── Scroll reveal ─────────────────────────────────────────── */
 
@@ -33,7 +68,8 @@ export default function LandingPage() {
   useScrollReveal();
 
   return (
-    <div className="flex flex-col min-h-screen overflow-x-hidden">
+    <div className="flex flex-col min-h-screen overflow-x-clip">
+      <CursorGlow />
       <Navbar />
       <main className="flex-1">
         <Hero />
@@ -347,75 +383,284 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
-/* ─── How it works ──────────────────────────────────────────── */
+/* ─── How it works (sticky scroll) ─────────────────────────── */
+
+const HOW_STEPS = [
+  {
+    n: "01",
+    icon: <StepLinkIcon />,
+    title: "Paste any URL",
+    body: "SaaS app, internal tool, public website. If a browser can load it, auto-mcp can map it. Optionally attach a GitHub repo for deeper coverage.",
+    tag: "< 10 seconds",
+  },
+  {
+    n: "02",
+    icon: <StepBotIcon />,
+    title: "The agent explores",
+    body: "A Playwright browser visits every page, clicks every button, and captures every network request. It asks you for credentials if it hits a login wall.",
+    tag: "2–10 minutes",
+  },
+  {
+    n: "03",
+    icon: <StepDownIcon />,
+    title: "Download and ship",
+    body: "You get a zip with server.py, typed tool definitions, and a claude_desktop_config.json snippet. Drop it in and your AI agent is live.",
+    tag: "Instant",
+  },
+] as const;
 
 function HowItWorks() {
+  const [active, setActive] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const { top, height } = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const scrolled = Math.max(0, -top);
+      const max = height - vh;
+      const progress = max > 0 ? Math.min(1, scrolled / max) : 0;
+      setActive(Math.min(2, Math.floor(progress * 3)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const step = HOW_STEPS[active];
+
   return (
-    <section id="how-it-works" className="py-24 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div data-reveal className="text-center mb-16">
-          <p className="section-label mb-3">How it works</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight mb-4">
-            Three steps.<br />
-            <span className="text-gradient-accent">One MCP server.</span>
-          </h2>
-          <p className="text-text2 max-w-xl mx-auto">
-            No config files. No API docs to read. Just a URL.
-          </p>
-        </div>
+    <section id="how-it-works" className="section-grid relative">
+      {/* Static header */}
+      <div className="text-center pt-24 pb-12 px-4">
+        <p className="section-label mb-3">How it works</p>
+        <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight mb-4">
+          Three steps.<br />
+          <span className="text-gradient-accent">One MCP server.</span>
+        </h2>
+        <p className="text-text2 max-w-xl mx-auto">
+          No config files. No API docs to read. Just a URL.
+        </p>
+      </div>
 
-        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Horizontal connector line on desktop */}
-          <div
-            aria-hidden
-            className="hidden md:block absolute top-[3.25rem] left-[calc(33.33%+1.5rem)] right-[calc(33.33%+1.5rem)] h-px bg-border"
-          />
+      {/* Sticky scroll driver — 3× tall so each step gets one viewport of scroll */}
+      <div ref={wrapRef} style={{ height: "300vh" }}>
+        <div className="sticky top-16 h-[calc(100vh-4rem)] flex items-center px-4 sm:px-6">
+          {/* Outer slide frame */}
+          <div className="max-w-6xl mx-auto w-full rounded-2xl border border-border bg-surface shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-2" style={{ minHeight: "min(520px, calc(100vh - 10rem))" }}>
 
-          {[
-            {
-              n: "01",
-              icon: <StepLinkIcon />,
-              title: "Paste any URL",
-              body: "SaaS app, internal tool, public website. If a browser can load it, auto-mcp can map it. Optionally attach a GitHub repo for deeper coverage.",
-              tag: "< 10 seconds",
-            },
-            {
-              n: "02",
-              icon: <StepBotIcon />,
-              title: "The agent explores",
-              body: "A Playwright browser visits every page, clicks every button, and captures every network request. It asks you for credentials if it hits a login wall.",
-              tag: "2–10 minutes",
-            },
-            {
-              n: "03",
-              icon: <StepDownIcon />,
-              title: "Download and ship",
-              body: "You get a zip with server.py, typed tool definitions, and a claude_desktop_config.json snippet. Drop it in and your AI agent is live.",
-              tag: "Instant",
-            },
-          ].map((s, i) => (
-            <div
-              key={s.n}
-              data-reveal
-              data-delay={String(i + 1) as "1" | "2" | "3"}
-              className="card shine p-7 rounded-2xl relative"
-            >
-              <span className="font-mono font-black text-5xl text-border select-none block mb-5">
-                {s.n}
-              </span>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-accent bg-accent/10 border border-accent/20 mb-5">
-                {s.icon}
+            {/* ── Left: step info ── */}
+            <div className="relative p-10 lg:p-12 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-border">
+              {/* Step dots + counter */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex gap-2">
+                  {HOW_STEPS.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 rounded-full transition-all duration-500 ${
+                        i === active
+                          ? "w-8 bg-accent"
+                          : i < active
+                          ? "w-4 bg-accent/40"
+                          : "w-4 bg-border"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-muted font-mono">{active + 1} / {HOW_STEPS.length}</span>
               </div>
-              <h3 className="text-base font-bold text-text1 mb-2">{s.title}</h3>
-              <p className="text-sm text-text2 leading-relaxed mb-5">{s.body}</p>
-              <span className="inline-flex items-center text-[11px] font-medium text-accent bg-accent/10 border border-accent/20 rounded-full px-2.5 py-1">
-                {s.tag}
-              </span>
+
+              {/* Step content — animates on change */}
+              <div key={active} className="animate-fade-in flex-1">
+                <span className="font-mono font-black text-[4.5rem] leading-none text-border select-none block mb-4">
+                  {step.n}
+                </span>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-accent bg-accent/10 border border-accent/20 mb-5">
+                  {step.icon}
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-extrabold text-text1 mb-3 tracking-tight">
+                  {step.title}
+                </h3>
+                <p className="text-text2 leading-relaxed mb-6 max-w-sm">
+                  {step.body}
+                </p>
+              </div>
+
+              {/* Bottom: time tag + scroll hint */}
+              <div className="flex items-center justify-between pt-6 border-t border-border mt-6">
+                <span className="inline-flex items-center text-sm font-semibold text-accent bg-accent/10 border border-accent/20 rounded-full px-4 py-1.5">
+                  {step.tag}
+                </span>
+                <span className="text-xs text-muted">scroll to advance →</span>
+              </div>
             </div>
-          ))}
+
+            {/* ── Right: animation panel ── */}
+            <div key={`anim-${active}`} className="animate-fade-in hidden lg:flex items-center justify-center p-10 bg-surface-2">
+              {active === 0 && <StepAnim1 />}
+              {active === 1 && <StepAnim2 />}
+              {active === 2 && <StepAnim3 />}
+            </div>
+
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/* ── Step animations ── */
+
+function StepAnim1() {
+  const [chars, setChars] = useState(0);
+  const url = "https://github.com";
+  useEffect(() => {
+    setChars(0);
+    const t = setInterval(() => setChars((c) => (c < url.length ? c + 1 : c)), 65);
+    return () => clearInterval(t);
+  }, []);
+  const done = chars === url.length;
+
+  return (
+    <div className="card p-8 max-w-sm mx-auto space-y-5">
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Enter any URL</p>
+      {/* URL bar */}
+      <div className="flex items-center gap-2 bg-bg border border-border rounded-xl px-4 py-3 font-mono text-sm">
+        <svg className="w-3.5 h-3.5 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        <span className="text-text1">{url.slice(0, chars)}</span>
+        <span className={`w-0.5 h-4 bg-accent ml-0.5 ${done ? "animate-pulse" : ""}`} />
+      </div>
+      {/* Button */}
+      <div
+        className={`w-full btn-primary py-3 rounded-xl text-sm font-semibold text-center transition-all duration-700 ${done ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
+      >
+        Generate MCP →
+      </div>
+      {/* Trust line */}
+      <p className={`text-center text-xs text-muted transition-opacity duration-500 ${done ? "opacity-100" : "opacity-0"}`}>
+        Free to start · No credit card
+      </p>
+    </div>
+  );
+}
+
+function StepAnim2() {
+  const logs = [
+    { icon: "✓", color: "text-success", text: "GET /repos  captured", delay: 200 },
+    { icon: "✓", color: "text-success", text: "POST /issues  captured", delay: 700 },
+    { icon: "✓", color: "text-success", text: "GET /pulls  captured", delay: 1200 },
+    { icon: "⟳", color: "text-accent animate-spin", text: "Exploring /settings…", delay: 1700 },
+    { icon: "✓", color: "text-success", text: "PATCH /user  captured", delay: 2400 },
+  ];
+  const [visible, setVisible] = useState<number[]>([]);
+  useEffect(() => {
+    setVisible([]);
+    logs.forEach((l, i) => {
+      const t = setTimeout(() => setVisible((v) => [...v, i]), l.delay);
+      return () => clearTimeout(t);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="card overflow-hidden max-w-sm mx-auto">
+      {/* Browser bar */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-2">
+        <div className="flex gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-danger/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-warn/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-success/60" />
+        </div>
+        <div className="flex-1 flex justify-center">
+          <div className="bg-bg border border-border rounded-md px-3 py-0.5 text-[11px] font-mono text-muted">
+            github.com/api/…
+          </div>
+        </div>
+      </div>
+
+      {/* Log lines */}
+      <div className="px-5 py-4 space-y-2.5 font-mono text-[11px] min-h-[200px]">
+        {logs.map((l, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 transition-all duration-300 ${
+              visible.includes(i) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+            }`}
+          >
+            <span className={`shrink-0 w-4 ${l.color}`}>{l.icon}</span>
+            <span className="text-text2">{l.text}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Counter */}
+      <div className="border-t border-border px-5 py-3 flex justify-between items-center bg-surface-2">
+        <span className="text-xs text-muted">Endpoints captured</span>
+        <span className="font-mono font-bold text-accent text-sm">{visible.length * 3}</span>
+      </div>
+    </div>
+  );
+}
+
+function StepAnim3() {
+  const lines = [
+    { color: "text-muted",   text: "# auto-mcp generated · server.py" },
+    { color: "text-accent",  text: "from mcp import FastMCP" },
+    { color: "text-text2",   text: "" },
+    { color: "text-accent",  text: "@mcp.tool()" },
+    { color: "text-text1",   text: "async def list_repos(org: str):" },
+    { color: "text-muted",   text: '  """List org repositories."""' },
+    { color: "text-text2",   text: "  return await api.get(...)" },
+    { color: "text-text2",   text: "" },
+    { color: "text-accent",  text: "@mcp.tool()" },
+    { color: "text-text1",   text: "async def create_issue(...):" },
+    { color: "text-muted",   text: '  """Open a new issue."""' },
+    { color: "text-text2",   text: "  return await api.post(...)" },
+  ];
+  const [visible, setVisible] = useState(0);
+  useEffect(() => {
+    setVisible(0);
+    const t = setInterval(() => setVisible((v) => (v < lines.length ? v + 1 : v)), 120);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const done = visible >= lines.length;
+
+  return (
+    <div className="card overflow-hidden max-w-sm mx-auto">
+      {/* Terminal bar */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-2">
+        <div className="flex gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-danger/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-warn/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-success/60" />
+        </div>
+        <span className="flex-1 text-center text-[11px] font-mono text-muted">server.py</span>
+      </div>
+
+      {/* Code */}
+      <div className="px-4 py-3 font-mono text-[11px] leading-relaxed bg-bg min-h-[180px]">
+        {lines.slice(0, visible).map((l, i) => (
+          <div key={i} className={`${l.color}`}>{l.text || " "}</div>
+        ))}
+      </div>
+
+      {/* Download badge */}
+      <div className={`border-t border-border px-4 py-3 bg-surface-2 transition-all duration-500 ${done ? "opacity-100" : "opacity-0"}`}>
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-success">
+              <span>✓</span> 14 tools · claude_desktop_config.json
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-success/80 rounded-lg px-3 py-1.5">
+            ↓ Download .zip
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -577,7 +822,7 @@ function CodeLine({ children }: { children: React.ReactNode }) {
 
 function BentoFeatures() {
   return (
-    <section className="py-16 px-4 border-t border-border">
+    <section className="section-grid py-16 px-4 border-t border-border relative">
       <div className="max-w-5xl mx-auto">
         <div data-reveal className="text-center mb-14">
           <p className="section-label mb-3">Features</p>
@@ -790,43 +1035,101 @@ function Pricing() {
 
 function CtaBanner() {
   return (
-    <section className="px-4 py-20">
-      <div className="max-w-4xl mx-auto" data-reveal>
-        <div className="relative rounded-2xl overflow-hidden p-14 text-center bg-surface border border-border">
-          {/* Subtle accent radial glow */}
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse 70% 60% at 50% 0%, rgb(var(--accent-rgb) / 0.08) 0%, transparent 70%)",
-            }}
-          />
-          <div className="relative z-10">
-            <h2 className="text-4xl sm:text-5xl font-extrabold mb-5">
-              <span className="text-text1">Your first MCP server is</span>
-              <br />
-              <span className="text-gradient-accent">three minutes away.</span>
-            </h2>
-            <p className="text-text2 mb-9 max-w-lg mx-auto">
-              No config. No API docs. Just a URL and a download.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                href="/auth"
-                className="btn-primary px-8 py-3.5 rounded-xl text-[15px]"
-              >
-                Start for free →
-              </Link>
-              <a
-                href="https://github.com/VarunGuptaPy/auto-mcp"
-                target="_blank"
-                rel="noreferrer"
-                className="px-8 py-3.5 rounded-xl font-semibold text-text1 text-[15px] border border-border bg-bg hover:bg-surface transition-colors flex items-center justify-center gap-2"
-              >
-                <GithubIcon /> Star on GitHub
-              </a>
+    <section className="px-4 sm:px-6 py-16">
+      <div className="max-w-6xl mx-auto" data-reveal>
+        <div className="relative rounded-2xl overflow-hidden border border-accent/25 cta-grid">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] items-center">
+
+            {/* Left: text content */}
+            <div className="px-10 sm:px-14 py-14 sm:py-16 max-w-xl">
+              <h2 className="text-4xl sm:text-[2.75rem] font-black text-text1 leading-[1.08] mb-5 tracking-tight">
+                Your first MCP server<br />is three minutes away.
+              </h2>
+              <p className="text-text2 text-lg leading-relaxed mb-9">
+                No config. No API docs. Paste a URL, let the agent explore,
+                and download a production-ready Python server.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/auth"
+                  className="inline-flex items-center px-7 py-3.5 rounded-xl text-[15px] font-semibold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-85 transition-opacity"
+                >
+                  Get started free →
+                </Link>
+                <a
+                  href="https://github.com/VarunGuptaPy/auto-mcp"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-[15px] font-semibold text-text2 hover:text-text1 transition-colors"
+                >
+                  <GithubIcon /> Star on GitHub
+                </a>
+              </div>
             </div>
+
+            {/* Right: floating product mockup */}
+            <div className="hidden lg:flex items-end justify-end self-stretch overflow-hidden relative min-w-[400px]">
+              {/* Shadow backdrop */}
+              <div
+                aria-hidden
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    "radial-gradient(ellipse 80% 80% at 100% 100%, rgb(var(--accent-rgb) / 0.10) 0%, transparent 65%)",
+                }}
+              />
+
+              {/* Floating card — slightly tilted, partially cropped at edges */}
+              <div
+                className="relative mr-8 mb-8 w-[340px] rounded-xl overflow-hidden shadow-2xl border border-border bg-surface"
+                style={{ transform: "rotate(2deg) translateY(12px)" }}
+              >
+                {/* Terminal title bar */}
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-2">
+                  <div className="flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-danger/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-warn/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-success/60" />
+                  </div>
+                  <span className="flex-1 text-center text-[11px] text-muted font-mono">
+                    server.py — Generated
+                  </span>
+                </div>
+
+                {/* Code content */}
+                <div className="p-4 font-mono text-[11px] leading-[1.65] bg-bg space-y-0.5">
+                  <div className="text-muted"># auto-mcp generated · github.com/api</div>
+                  <div className="text-muted">from mcp import FastMCP</div>
+                  <div className="h-2" />
+                  <div className="text-accent">mcp = FastMCP(&quot;GitHub API&quot;)</div>
+                  <div className="h-2" />
+                  <div><span className="text-accent">@mcp.tool()</span></div>
+                  <div><span className="text-accent">async def</span> <span className="text-text1">list_repos</span><span className="text-text2">(org: str) -&gt; list:</span></div>
+                  <div className="text-muted pl-4">&quot;&quot;&quot;List repos for an org.&quot;&quot;&quot;</div>
+                  <div className="text-text2 pl-4">return await api.get(f&quot;/orgs/&quot;)</div>
+                  <div className="h-2" />
+                  <div><span className="text-accent">@mcp.tool()</span></div>
+                  <div><span className="text-accent">async def</span> <span className="text-text1">get_issue</span><span className="text-text2">(repo, n: int):</span></div>
+                  <div className="text-muted pl-4">&quot;&quot;&quot;Get issue by number.&quot;&quot;&quot;</div>
+                  <div className="text-text2 pl-4">return await api.get(f&quot;/issues/&quot;)</div>
+                  <div className="h-2" />
+                  <div className="text-muted">...</div>
+                </div>
+
+                {/* Footer bar */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-surface-2">
+                  <div className="flex items-center gap-1.5 text-[10px] text-success">
+                    <span className="w-3.5 h-3.5 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-[8px]">✓</span>
+                    14 tools generated
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-success">
+                    <span className="w-3.5 h-3.5 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-[8px]">✓</span>
+                    claude_desktop_config.json
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
