@@ -6,6 +6,8 @@ import Timeline from "@/components/Timeline";
 import MethodPill from "@/components/MethodPill";
 import ChatPanel from "@/components/ChatPanel";
 import { useSSE } from "@/lib/useSSE";
+import { useAuth } from "@/lib/auth-context";
+import { updateJobByJobId } from "@/lib/firestore";
 import type { ChatMessage, Endpoint, JobState, JobStatus, SSEEvent } from "@/lib/types";
 
 // ---- state ----------------------------------------------------------------
@@ -89,6 +91,7 @@ const INIT: PageState = {
 export default function JobPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(reducer, INIT);
   const startTimeRef = useRef<number>(Date.now());
   const elapsedRef = useRef<HTMLSpanElement>(null);
@@ -127,7 +130,19 @@ export default function JobPage() {
       switch (ev.type) {
         case "stage_change":
           dispatch({ type: "STAGE", stage: ev.stage, features: ev.features_found });
-          if (ev.stage === "done") router.push(`/done/${id}`);
+          if (ev.stage === "done") {
+            if (user && id) {
+              updateJobByJobId(user.uid, id, {
+                status: "done",
+                features: ev.features_found ?? 0,
+              }).catch(() => {});
+            }
+            router.push(`/done/${id}`);
+          } else if (ev.stage === "failed") {
+            if (user && id) {
+              updateJobByJobId(user.uid, id, { status: "failed" }).catch(() => {});
+            }
+          }
           break;
         case "step_update":
           dispatch({ type: "STEP", step: ev.step, total: ev.total_steps, url: ev.screenshot_url });
@@ -228,10 +243,13 @@ export default function JobPage() {
           break;
         case "error":
           dispatch({ type: "ERROR", message: ev.message });
+          if (user && id) {
+            updateJobByJobId(user.uid, id, { status: "failed" }).catch(() => {});
+          }
           break;
       }
     },
-    [id, router],
+    [id, router, user],
   );
 
   function handleAnswered(questionId: string) {

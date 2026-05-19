@@ -1,6 +1,6 @@
 import {
   doc, collection, addDoc, updateDoc, getDocs,
-  query, orderBy, limit, serverTimestamp, increment,
+  query, orderBy, limit, where, serverTimestamp, increment,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 
@@ -39,6 +39,18 @@ export async function updateJobDone(
 ) {
   const db = getFirebaseDb();
   await updateDoc(doc(db, "users", uid, "jobs", docId), data);
+}
+
+export async function updateJobByJobId(
+  uid: string,
+  jobId: string,
+  data: { status: string; features?: number; name?: string }
+) {
+  const db = getFirebaseDb();
+  const q = query(collection(db, "users", uid, "jobs"), where("jobId", "==", jobId));
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+  await updateDoc(snap.docs[0].ref, data);
 }
 
 export async function listJobs(uid: string, n = 20): Promise<JobRecord[]> {
