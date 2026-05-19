@@ -74,8 +74,6 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <CompatStrip />
-        <Stats />
-        <ProductPreview />
         <HowItWorks />
         <CodePreview />
         <BentoFeatures />
@@ -93,6 +91,7 @@ function Hero() {
   const { user } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const videoWrapRef = useRef<HTMLDivElement>(null);
 
   function go(e: React.FormEvent) {
     e.preventDefault();
@@ -101,272 +100,262 @@ function Hero() {
     router.push(`${dest}&url=${encodeURIComponent(url.trim())}`);
   }
 
+  // Scroll-driven pop: 0.35 → 1.0 scale, negative marginBottom collapses the dead space
+  useEffect(() => {
+    const el = videoWrapRef.current;
+    if (!el) return;
+    const START = 0.35;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = Math.max(0, Math.min(1, (vh - rect.top) / (vh * 0.85)));
+      const scale = START + progress * (1 - START);
+      const radius = Math.round(28 - progress * 12); // 28px → 16px
+      const gap = el.offsetHeight * (1 - scale);
+      el.style.transform = `scale(${scale.toFixed(4)})`;
+      el.style.transformOrigin = "top center";
+      el.style.borderRadius = `${radius}px`;
+      el.style.marginBottom = `-${gap.toFixed(1)}px`;
+    };
+    // Set initial collapsed state before first paint
+    const initialGap = el.offsetHeight * (1 - START);
+    el.style.marginBottom = `-${initialGap.toFixed(1)}px`;
+    window.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => window.removeEventListener("scroll", update);
+  }, []);
+
   return (
-    <section className="hero-bg relative min-h-[90vh] flex flex-col items-center justify-center px-4 pt-10 pb-28 text-center overflow-hidden">
-      {/* Dot grid */}
+    <section className="hero-bg relative overflow-x-hidden">
       <div aria-hidden className="absolute inset-0 dot-grid opacity-80 pointer-events-none" />
 
-      <div className="relative z-10 max-w-3xl mx-auto">
-        {/* Dodo-style pill badge — simple border, no colored bg */}
-        <div className="animate-fade-in inline-flex items-center gap-2 mb-8 px-4 py-1.5 rounded-full border border-border bg-surface/80 text-sm text-text2 shadow-sm">
-          <span className="font-medium text-text1">Powered by Claude + Playwright</span>
-          <span className="text-muted">→</span>
-        </div>
+      {/* ── Two-column first fold ── */}
+      <div className="relative z-10 min-h-[92vh] flex items-center">
+        <div className="w-full max-w-7xl mx-auto px-6 sm:px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
-        {/* Headline — large, heavy, tight */}
-        <h1
-          className="animate-fade-in-d1 font-black tracking-tight leading-[1.05] mb-6 text-text1"
-          style={{ fontSize: "clamp(2.8rem,7.5vw,5.5rem)" }}
-        >
-          Turn any website into<br />
-          <span className="text-gradient-accent">an MCP server.</span>
-        </h1>
+          {/* Left column — center on mobile, left-aligned on desktop */}
+          <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
+            <div className="animate-fade-in inline-flex items-center gap-2 mb-7 px-4 py-1.5 rounded-full border border-border bg-surface/80 text-sm text-text2 shadow-sm">
+              <span className="font-medium text-text1">Powered by Claude + Playwright</span>
+              <span className="text-muted">→</span>
+            </div>
 
-        {/* Subheadline */}
-        <p className="animate-fade-in-d2 text-lg text-text2 leading-relaxed max-w-xl mx-auto mb-10">
-          Paste a URL. auto-mcp&apos;s browser agent maps every route, captures
-          every endpoint, and ships a typed Python MCP server—without you writing
-          a single line of code.
-        </p>
-
-        {/* CTA — two rows matching Dodo's large button style */}
-        <div className="animate-fade-in-d2 flex flex-col sm:flex-row gap-3 justify-center mb-5">
-          <form onSubmit={go} className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://your-app.com"
-              className="bg-surface border border-border rounded-xl px-5 py-3.5 text-sm text-text1 placeholder-muted outline-none focus:border-accent/60 transition-colors shadow-sm w-72"
-            />
-            <button
-              type="submit"
-              className="btn-primary px-7 py-3.5 rounded-xl text-[15px] font-semibold whitespace-nowrap"
+            <h1
+              className="animate-fade-in-d1 font-black tracking-tight leading-[1.06] mb-5 text-text1"
+              style={{ fontSize: "clamp(2rem, 3.6vw, 3.25rem)" }}
             >
-              Generate MCP →
-            </button>
-          </form>
-          <a
-            href="https://github.com/VarunGuptaPy/auto-mcp"
-            target="_blank"
-            rel="noreferrer"
-            className="px-7 py-3.5 rounded-xl text-[15px] font-semibold text-text2 hover:text-text1 transition-colors whitespace-nowrap flex items-center justify-center gap-2"
-          >
-            <GithubIcon /> View on GitHub
-          </a>
-        </div>
+              Turn any website into{" "}
+              <span className="text-gradient-accent">an MCP server.</span>
+            </h1>
 
-        <p className="animate-fade-in-d3 text-sm text-muted">
-          Free to start · No credit card · 5 servers/month on free tier
+            <p className="animate-fade-in-d2 text-base text-text2 leading-relaxed mb-8 max-w-md">
+              Paste a URL. auto-mcp&apos;s browser agent maps every route, captures
+              every endpoint, and ships a typed Python MCP server—without you
+              writing a single line of code.
+            </p>
+
+            <form onSubmit={go} className="animate-fade-in-d2 flex flex-col sm:flex-row gap-3 mb-4 w-full max-w-sm mx-auto lg:mx-0">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://your-app.com"
+                className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm text-text1 placeholder-muted outline-none focus:border-accent/60 transition-colors shadow-sm"
+              />
+              <button
+                type="submit"
+                className="btn-primary px-5 py-3 rounded-xl text-sm font-semibold whitespace-nowrap"
+              >
+                Generate →
+              </button>
+            </form>
+
+            <div className="animate-fade-in-d2 flex items-center justify-center lg:justify-start gap-4 mb-5">
+              <a
+                href="https://github.com/VarunGuptaPy/auto-mcp"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium text-text2 hover:text-text1 transition-colors flex items-center gap-1.5"
+              >
+                <GithubIcon /> View on GitHub
+              </a>
+            </div>
+
+            <p className="animate-fade-in-d3 text-xs text-muted">
+              Free to start · No credit card · 5 servers/month on free tier
+            </p>
+          </div>
+
+          {/* Right column — shown below text on mobile, beside it on desktop */}
+          <div className="animate-fade-in-d1 w-full lg:block">
+            <HeroMockup />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Demo video (scroll-scale) — still inside hero-bg ── */}
+      <div className="relative z-10 text-center px-4 mb-8">
+        <p className="section-label">Live demo</p>
+        <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-text1 tracking-tight">
+          Watch the agent work
+        </h2>
+        <p className="mt-2 text-sm text-text2 max-w-xs mx-auto">
+          From URL to typed MCP server in under five minutes.
         </p>
       </div>
+
+      <div
+        ref={videoWrapRef}
+        className="relative z-10 w-full will-change-transform origin-top overflow-hidden border border-border"
+        style={{ transform: "scale(0.82)", borderRadius: "20px" }}
+      >
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2 shrink-0">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-danger/50" />
+            <div className="w-3 h-3 rounded-full bg-warn/50" />
+            <div className="w-3 h-3 rounded-full bg-success/50" />
+          </div>
+          <div className="flex-1 flex justify-center">
+            <div className="flex items-center gap-2 bg-bg border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-60">
+              <LockIcon />
+              auto-mcp.dev · live demo
+            </div>
+          </div>
+        </div>
+        <div className="relative w-full bg-bg" style={{ paddingBottom: "56.25%" }}>
+          <iframe
+            className="absolute inset-0 w-full h-full"
+            src="https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0&modestbranding=1&color=white"
+            title="auto-mcp live demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+
+      <div className="h-20 relative z-10" />
     </section>
   );
 }
 
-/* ─── Compat strip ──────────────────────────────────────────── */
+/* ─── Hero right-column mockup ──────────────────────────────── */
 
-function CompatStrip() {
-  const tools = [
-    "Claude Desktop",
-    "Cursor",
-    "GPT-4o",
-    "Cline",
-    "Continue.dev",
-    "Windsurf",
-    "Zed",
-    "VS Code",
-    "Claude Desktop",
-    "Cursor",
-    "GPT-4o",
-    "Cline",
-    "Continue.dev",
-    "Windsurf",
-    "Zed",
-    "VS Code",
-  ];
+function HeroMockup() {
+  // Natural size of the mockup before scaling
+  const NATURAL_H = 380;
+  const SCALE = 0.72;
 
   return (
-    <div className="relative border-y border-border py-5 overflow-hidden">
-      {/* Fade masks via CSS classes — no inline styles */}
-      <div className="absolute inset-y-0 left-0 w-24 z-10 pointer-events-none marquee-fade-l" />
-      <div className="absolute inset-y-0 right-0 w-24 z-10 pointer-events-none marquee-fade-r" />
+    // Outer wrapper collapses layout footprint to the visual (scaled) size
+    <div className="relative w-full" style={{ height: `${NATURAL_H * SCALE}px` }}>
+      {/* Inner: rendered at full natural size, then scaled down from top-left */}
+      <div
+        className="absolute top-0 left-0 bg-surface border border-border rounded-2xl overflow-hidden shadow-2xl"
+        style={{
+          width: `${100 / SCALE}%`,
+          transform: `scale(${SCALE})`,
+          transformOrigin: "top left",
+        }}
+      >
+        {/* Browser title bar */}
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-surface-2">
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-danger/50" />
+            <div className="w-2.5 h-2.5 rounded-full bg-warn/50" />
+            <div className="w-2.5 h-2.5 rounded-full bg-success/50" />
+          </div>
+          <div className="flex-1 flex justify-center">
+            <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2.5 py-0.5 text-[11px] text-muted font-mono w-52">
+              <LockIcon />
+              auto-mcp.dev/jobs/f7a2c1
+            </div>
+          </div>
+        </div>
 
-      <p className="text-center text-[10px] uppercase tracking-[0.2em] text-muted mb-4">
-        Works with every MCP-compatible client
-      </p>
+        {/* Three-column app UI */}
+        <div className="grid grid-cols-[160px_1fr_200px] text-xs" style={{ height: `${NATURAL_H}px` }}>
 
-      <div className="flex animate-marquee whitespace-nowrap">
-        {tools.map((t, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-3 mx-7 text-sm text-text2 font-medium"
-          >
-            <span className="w-1 h-1 rounded-full bg-border" />
-            {t}
-          </span>
-        ))}
+          {/* Timeline */}
+          <div className="border-r border-border p-4 space-y-3">
+            <p className="text-[9px] uppercase tracking-wider text-muted mb-3">Progress</p>
+            {[
+              { label: "Code analysis", done: true },
+              { label: "Exploring",     done: true },
+              { label: "Analyzing",     active: true },
+              { label: "Generating",    done: false },
+              { label: "Done",          done: false },
+            ].map((s) => (
+              <div key={s.label} className="flex items-center gap-2.5">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] shrink-0 ${
+                  s.done
+                    ? "bg-success/20 border border-success/40 text-success"
+                    : (s as { active?: boolean }).active
+                    ? "bg-accent/20 border border-accent/40 text-accent animate-pulse"
+                    : "bg-surface-2 border border-border text-muted"
+                }`}>
+                  {s.done ? "✓" : (s as { active?: boolean }).active ? "●" : "○"}
+                </div>
+                <span className={s.done ? "text-text2" : (s as { active?: boolean }).active ? "text-text1 font-medium" : "text-muted"}>
+                  {s.label}
+                </span>
+              </div>
+            ))}
+            <div className="pt-3 border-t border-border">
+              <p className="text-2xl font-mono font-bold text-text1">1:42</p>
+              <p className="text-muted text-[9px]">elapsed</p>
+            </div>
+          </div>
+
+          {/* Screenshot + reasoning */}
+          <div className="border-r border-border p-3 flex flex-col gap-2.5">
+            <div className="flex-1 bg-bg rounded-lg overflow-hidden relative border border-border">
+              <div className="absolute inset-0 flex flex-col">
+                <div className="h-6 bg-surface-2 border-b border-border flex items-center px-2 gap-1.5">
+                  <div className="w-14 h-1.5 bg-border rounded" />
+                  <div className="w-20 h-1.5 bg-border rounded" />
+                </div>
+                <div className="flex-1 p-2.5 space-y-2">
+                  {[68, 42, 88, 54, 76].map((w, i) => (
+                    <div key={i} className="h-1.5 rounded bg-surface-2" style={{ width: `${w}%` }} />
+                  ))}
+                </div>
+              </div>
+              <div className="absolute top-1.5 right-1.5 text-[9px] font-mono bg-surface border border-border rounded px-1.5 py-0.5 text-text2">
+                step 18/24
+              </div>
+            </div>
+
+            <div className="bg-surface-2 border border-border rounded-lg p-2.5">
+              <p className="text-[9px] uppercase tracking-wider text-muted mb-1">Agent reasoning</p>
+              <p className="text-[10px] text-text2 leading-relaxed line-clamp-2">
+                Clicking &quot;View item&quot; → /items/42 → capturing GET&nbsp;/api/items/42 with auth header
+              </p>
+            </div>
+
+            <div className="bg-surface-2 border border-border rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+              <span className="text-[9px] uppercase tracking-wider text-muted">Endpoints captured</span>
+              <span className="text-accent font-mono font-bold">12</span>
+            </div>
+          </div>
+
+          {/* Chat */}
+          <div className="p-3 flex flex-col gap-2">
+            <p className="text-[9px] uppercase tracking-wider text-muted mb-1">Agent chat</p>
+            <AgentBubble text="Found a login wall at /dashboard. Should I authenticate?" />
+            <UserBubble text="Yes — test@example.com / pass123" />
+            <AgentBubble text="Done. Continuing exploration…" />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ─── Stats ─────────────────────────────────────────────────── */
-
-function Stats() {
-  const items = [
-    { value: "< 5 min", label: "Average generation time" },
-    { value: "100%", label: "Typed Python output" },
-    { value: "Free", label: "To start, no card needed" },
-  ];
-
-  return (
-    <section className="py-16 px-4 border-b border-border">
-      <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-10 text-center">
-        {items.map((item, i) => (
-          <div
-            key={item.label}
-            data-reveal
-            data-delay={String(i + 1) as "1" | "2" | "3"}
-            className="flex flex-col items-center gap-2"
-          >
-            <span
-              className="font-black text-text1 leading-none"
-              style={{ fontSize: "clamp(2.2rem,5vw,3.5rem)" }}
-            >
-              {item.value}
-            </span>
-            <span className="text-sm text-text2">{item.label}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ─── Product preview ──────────────────────────────────────── */
-
-function ProductPreview() {
-  return (
-    <section className="px-4 py-24">
-      <div className="max-w-5xl mx-auto" data-reveal>
-        <div className="mb-10 text-center">
-          <p className="section-label mb-3">Live demo</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-text1 leading-tight">
-            Watch the agent work
-          </h2>
-        </div>
-
-        {/* Browser chrome */}
-        <div className="relative bg-surface border border-border rounded-2xl overflow-hidden shadow-2xl">
-          {/* Title bar */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-danger/50" />
-              <div className="w-3 h-3 rounded-full bg-warn/50" />
-              <div className="w-3 h-3 rounded-full bg-success/50" />
-            </div>
-            <div className="flex-1 flex justify-center">
-              <div className="flex items-center gap-2 bg-bg border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-64">
-                <LockIcon />
-                auto-mcp.dev/jobs/f7a2c1
-              </div>
-            </div>
-          </div>
-
-          {/* Fake app UI */}
-          <div className="grid grid-cols-[180px_1fr_280px] h-[380px] text-xs">
-            {/* Left: timeline */}
-            <div className="border-r border-border p-4 space-y-3">
-              <p className="text-[10px] uppercase tracking-wider text-muted mb-4">Progress</p>
-              {[
-                { label: "Code analysis", done: true },
-                { label: "Exploring",     done: true },
-                { label: "Analyzing",     active: true },
-                { label: "Generating",    done: false },
-                { label: "Done",          done: false },
-              ].map((s) => (
-                <div key={s.label} className="flex items-center gap-2.5">
-                  <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0 ${
-                      s.done
-                        ? "bg-success/20 border border-success/40 text-success"
-                        : s.active
-                        ? "bg-accent/20 border border-accent/40 text-accent animate-pulse"
-                        : "bg-surface-2 border border-border text-muted"
-                    }`}
-                  >
-                    {s.done ? "✓" : s.active ? "●" : "○"}
-                  </div>
-                  <span
-                    className={
-                      s.done ? "text-text2" : s.active ? "text-text1" : "text-muted"
-                    }
-                  >
-                    {s.label}
-                  </span>
-                </div>
-              ))}
-
-              <div className="pt-4 border-t border-border">
-                <p className="text-2xl font-mono font-bold text-text1">1:42</p>
-                <p className="text-muted text-[10px]">elapsed</p>
-              </div>
-            </div>
-
-            {/* Center: screenshot area */}
-            <div className="border-r border-border p-4 flex flex-col gap-3">
-              <div className="flex-1 bg-bg rounded-lg overflow-hidden relative border border-border">
-                <div className="absolute inset-0 flex flex-col">
-                  <div className="h-7 bg-surface-2 border-b border-border flex items-center px-3 gap-2">
-                    <div className="w-16 h-2 bg-border rounded" />
-                    <div className="w-24 h-2 bg-border rounded" />
-                  </div>
-                  <div className="flex-1 p-3 space-y-2">
-                    {[70, 45, 90, 55, 80].map((w, i) => (
-                      <div key={i} className="h-2 rounded bg-surface-2" style={{ width: `${w}%` }} />
-                    ))}
-                  </div>
-                </div>
-                <div className="absolute top-2 right-2 text-[9px] font-mono bg-surface border border-border rounded px-1.5 py-0.5 text-text2">
-                  step 18/24
-                </div>
-              </div>
-
-              <div className="bg-surface-2 border border-border rounded-lg p-3">
-                <p className="text-[9px] uppercase tracking-wider text-muted mb-1.5">Agent reasoning</p>
-                <p className="text-[11px] text-text2 leading-relaxed line-clamp-2">
-                  Clicking &quot;View item&quot; button → navigating to /items/42 → capturing GET /api/items/42 endpoint with auth header
-                </p>
-              </div>
-
-              <div className="bg-surface-2 border border-border rounded-lg px-3 py-2 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-muted">Endpoints captured</span>
-                <span className="text-accent font-mono font-bold text-sm">12</span>
-              </div>
-            </div>
-
-            {/* Right: chat panel */}
-            <div className="p-4 flex flex-col gap-2.5">
-              <p className="text-[10px] uppercase tracking-wider text-muted mb-1">Agent chat</p>
-              <AgentBubble text="I've explored 18 pages. Found a login wall at /dashboard. Do you want me to authenticate?" />
-              <UserBubble text="Yes, use test@example.com / password123" />
-              <AgentBubble text="Got it. Authenticated successfully. Continuing exploration…" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function AgentBubble({ text }: { text: string }) {
   return (
-    <div className="flex gap-2 items-start">
-      <div className="w-5 h-5 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-[8px] text-accent shrink-0 mt-0.5">
-        A
-      </div>
-      <div className="bg-surface border border-border rounded-xl rounded-tl-sm px-2.5 py-2 text-[10px] text-text2 leading-relaxed max-w-[200px]">
+    <div className="flex gap-1.5 items-start">
+      <div className="w-4 h-4 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-[7px] text-accent shrink-0 mt-0.5">A</div>
+      <div className="bg-surface border border-border rounded-xl rounded-tl-sm px-2 py-1.5 text-[10px] text-text2 leading-relaxed">
         {text}
       </div>
     </div>
@@ -375,11 +364,91 @@ function AgentBubble({ text }: { text: string }) {
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex gap-2 items-start justify-end">
-      <div className="bg-accent/15 border border-accent/20 rounded-xl rounded-tr-sm px-2.5 py-2 text-[10px] text-accent leading-relaxed max-w-[200px]">
+    <div className="flex justify-end">
+      <div className="bg-accent/15 border border-accent/20 rounded-xl rounded-tr-sm px-2 py-1.5 text-[10px] text-accent leading-relaxed max-w-[85%]">
         {text}
       </div>
     </div>
+  );
+}
+
+/* ─── Compat strip ──────────────────────────────────────────── */
+
+// Simple Icons CDN: black SVG → dark:invert makes it white on dark bg
+const SI = (slug: string) => `https://cdn.simpleicons.org/${slug}/000000`;
+
+const COMPAT_TOOLS = [
+  { name: "Claude Desktop", img: SI("anthropic") },
+  { name: "Cursor",         img: SI("cursor") },
+  { name: "VS Code",        img: SI("visualstudiocode") },
+  { name: "GPT-4o",         img: SI("openai") },
+  { name: "Zed",            img: SI("zedindustries") },
+  { name: "Continue.dev",   svg: <ContinueIcon /> },
+  { name: "Windsurf",       svg: <WindsurfIcon /> },
+  { name: "Cline",          svg: <ClineIcon /> },
+];
+
+// Duplicate list for seamless infinite scroll
+const MARQUEE_ITEMS = [...COMPAT_TOOLS, ...COMPAT_TOOLS];
+
+function CompatStrip() {
+  return (
+    <div className="relative border-y border-border py-8 overflow-hidden">
+      <div className="absolute inset-y-0 left-0 w-32 z-10 pointer-events-none marquee-fade-l" />
+      <div className="absolute inset-y-0 right-0 w-32 z-10 pointer-events-none marquee-fade-r" />
+
+      <p className="text-center text-xs uppercase tracking-[0.2em] text-muted mb-7">
+        Works with every MCP-compatible client
+      </p>
+
+      <div className="flex animate-marquee whitespace-nowrap items-center">
+        {MARQUEE_ITEMS.map((t, i) => (
+          <span key={i} className="inline-flex items-center gap-3 mx-10 text-base text-text2 font-medium shrink-0">
+            {t.img ? (
+              <img
+                src={t.img}
+                alt={t.name}
+                width={24}
+                height={24}
+                className="w-6 h-6 opacity-70 dark:invert dark:opacity-60 shrink-0"
+              />
+            ) : (
+              <span className="w-6 h-6 shrink-0 flex items-center justify-center text-text2 opacity-70">
+                {t.svg}
+              </span>
+            )}
+            {t.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Inline SVGs for tools not yet on Simple Icons */
+
+function ContinueIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1.5 14.5V7.5l7 4.5-7 4.5z" />
+    </svg>
+  );
+}
+
+function WindsurfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+      <path d="M3 8.5c2.5-1.5 5-1.5 7.5 0S15 10 17.5 8.5 20 7 22 7v2c-2 0-3 .5-5 1.5S13.5 12 11 10.5 6 9 3 10.5V8.5zM3 13c2.5-1.5 5-1.5 7.5 0S15 14.5 17.5 13 20 11.5 22 11.5v2c-2 0-3 .5-5 1.5S13.5 16.5 11 15 6 13.5 3 15V13z"/>
+    </svg>
+  );
+}
+
+function ClineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </svg>
   );
 }
 
@@ -1052,7 +1121,7 @@ function CtaBanner() {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/auth"
-                  className="inline-flex items-center px-7 py-3.5 rounded-xl text-[15px] font-semibold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-85 transition-opacity"
+                  className="inline-flex items-center px-7 py-3.5 rounded-xl text-[15px] font-semibold bg-accent text-white hover:bg-accent-h transition-colors"
                 >
                   Get started free →
                 </Link>

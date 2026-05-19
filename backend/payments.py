@@ -1,13 +1,20 @@
 """
 DodoPayments integration — checkout sessions and webhook handling.
+
+Webhook signatures follow the Svix standard (used by DodoPayments):
+  signed_content = "{webhook-id}.{webhook-timestamp}.{raw_body}"
+  signature      = base64( HMAC-SHA256(base64decode(secret_after_whsec_), signed_content) )
+  header         = "webhook-signature: v1,<signature> [v1,<signature2> ...]"
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
 import os
+import time
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -15,11 +22,10 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-DODO_API_KEY       = os.getenv("DODO_API_KEY", "")
+DODO_API_KEY        = os.getenv("DODO_API_KEY", "")
 DODO_WEBHOOK_SECRET = os.getenv("DODO_WEBHOOK_SECRET", "")
-DODO_BASE_URL      = "https://live.dodopayments.com"
+DODO_BASE_URL       = "https://live.dodopayments.com"
 
-# Map plan IDs to DodoPayments product/price IDs (configure in dashboard)
 PLAN_PRODUCT_IDS: dict[str, str] = {
     "pro": os.getenv("DODO_PRODUCT_ID_PRO", ""),
 }
@@ -91,22 +97,55 @@ async def create_checkout(req: CheckoutRequest):
     return {"checkout_url": checkout_url}
 
 
+def _verify_svix_signature(body: bytes, headers: dict[str, str], secret: str) -> bool:
+    """
+    Verify a Svix-signed webhook (DodoPayments delivery format).
+    Returns True if any signature in the header matches.
+    """
+    msg_id    = headers.get("webhook-id", "")
+    timestamp = headers.get("webhook-timestamp", "")
+    sig_hdr   = headers.get("webhook-signature", "")
+
+    if not msg_id or not timestamp or not sig_hdr:
+        return False
+
+    # Reject timestamps more than 5 minutes old to prevent replay attacks
+    try:
+        if abs(time.time() - int(timestamp)) > 300:
+            return False
+    except ValueError:
+        return False
+
+    # Decode the secret — Svix secrets are "whsec_<base64>" or raw base64
+    raw_secret = secret[6:] if secret.startswith("whsec_") else secret
+    try:
+        secret_bytes = base64.b64decode(raw_secret)
+    except Exception:
+        secret_bytes = secret.encode()
+
+    signed = f"{msg_id}.{timestamp}.".encode() + body
+    expected_b64 = base64.b64encode(
+        hmac.new(secret_bytes, signed, hashlib.sha256).digest()
+    ).decode()
+
+    # Header may contain multiple space-separated "v1,<sig>" entries
+    for entry in sig_hdr.split(" "):
+        parts = entry.split(",", 1)
+        if len(parts) == 2 and parts[0] == "v1":
+            if hmac.compare_digest(parts[1], expected_b64):
+                return True
+    return False
+
+
 @router.post("/webhook")
 async def payment_webhook(request: Request):
     body = await request.body()
 
-    # DODO_WEBHOOK_SECRET is mandatory — reject all webhooks if not configured.
-    # Allowing unverified webhooks would let anyone forge subscription upgrades.
     if not DODO_WEBHOOK_SECRET:
         raise HTTPException(503, "Webhook secret not configured — set DODO_WEBHOOK_SECRET in .env")
 
-    signature = request.headers.get("webhook-signature") or request.headers.get("x-dodo-signature", "")
-    expected  = hmac.new(
-        DODO_WEBHOOK_SECRET.encode(),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(signature, expected):
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    if not _verify_svix_signature(body, headers, DODO_WEBHOOK_SECRET):
         raise HTTPException(401, "Invalid webhook signature")
 
     try:
@@ -114,17 +153,14 @@ async def payment_webhook(request: Request):
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON")
 
-    event_type = event.get("type", "")
-    data       = event.get("data", {})
-    metadata   = data.get("metadata", {})
+    event_type   = event.get("type", "")
+    data         = event.get("data", {})
+    metadata     = data.get("metadata", {})
     firebase_uid = metadata.get("firebase_uid")
     plan         = metadata.get("plan", "pro")
 
     if event_type in ("subscription.active", "payment.succeeded") and firebase_uid:
-        # Update Firebase via Admin SDK if configured, otherwise log the event.
-        # The frontend polls Firestore for plan changes after redirect.
         _handle_subscription_activated(firebase_uid, plan)
-
     elif event_type in ("subscription.cancelled", "subscription.expired") and firebase_uid:
         _handle_subscription_cancelled(firebase_uid)
 

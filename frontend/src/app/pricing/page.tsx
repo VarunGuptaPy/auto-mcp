@@ -28,7 +28,7 @@ const PLANS = [
   {
     id:      "pro",
     name:    "Pro",
-    price:   "$19",
+    price:   "$9.99",
     period:  "/month",
     tagline: "For developers who ship",
     badge:   "Most popular",
