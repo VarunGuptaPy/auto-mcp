@@ -73,6 +73,7 @@ export default function LandingPage() {
       <Navbar />
       <main className="flex-1">
         <Hero />
+        <DemoVideo />
         <CompatStrip />
         <HowItWorks />
         <CodePreview />
@@ -91,7 +92,6 @@ function Hero() {
   const { user } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState("");
-  const videoWrapRef = useRef<HTMLDivElement>(null);
 
   function go(e: React.FormEvent) {
     e.preventDefault();
@@ -99,23 +99,6 @@ function Hero() {
     const dest = user ? "/create" : "/auth?next=/create";
     router.push(`${dest}&url=${encodeURIComponent(url.trim())}`);
   }
-
-  // Pop animation: trigger once when the video section enters the viewport
-  useEffect(() => {
-    const el = videoWrapRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.classList.add("video-pop");
-          io.disconnect();
-        }
-      },
-      { threshold: 0.15 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
 
   return (
     <section className="hero-bg relative overflow-x-hidden">
@@ -184,9 +167,34 @@ function Hero() {
           </div>
         </div>
       </div>
+    </section>
+  );
+}
 
-      {/* ── Demo video (scroll-scale) — still inside hero-bg ── */}
-      <div className="relative z-10 text-center px-4 mb-8">
+/* ─── Demo video ────────────────────────────────────────────── */
+
+function DemoVideo() {
+  const videoWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = videoWrapRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.classList.add("video-pop");
+          io.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <section className="py-16 px-4 sm:px-8 lg:px-16">
+      <div className="text-center mb-10">
         <p className="section-label">Live demo</p>
         <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-text1 tracking-tight">
           Watch the agent work
@@ -196,7 +204,6 @@ function Hero() {
         </p>
       </div>
 
-      <div className="relative z-10 w-full px-4 sm:px-8 lg:px-16">
       <div
         ref={videoWrapRef}
         className="relative overflow-hidden border border-border mx-auto"
@@ -225,9 +232,6 @@ function Hero() {
           />
         </div>
       </div>
-      </div>
-
-      <div className="h-20 relative z-10" />
     </section>
   );
 }
