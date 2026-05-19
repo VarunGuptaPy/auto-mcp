@@ -123,11 +123,6 @@ function Hero() {
 
           {/* Left column — center on mobile, left-aligned on desktop */}
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
-            <div className="animate-fade-in inline-flex items-center gap-2 mb-7 px-4 py-1.5 rounded-full border border-border bg-surface/80 text-sm text-text2 shadow-sm">
-              <span className="font-medium text-text1">Powered by Claude + Playwright</span>
-              <span className="text-muted">→</span>
-            </div>
-
             <h1
               className="animate-fade-in-d1 font-black tracking-tight leading-[1.06] mb-5 text-text1"
               style={{ fontSize: "clamp(2rem, 3.6vw, 3.25rem)" }}

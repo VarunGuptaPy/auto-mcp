@@ -11,20 +11,20 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
+    "/create/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/create/page.js"
+    ],
     "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/page.js"
     ],
-    "/pricing/page": [
+    "/jobs/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/pricing/page.js"
-    ],
-    "/create/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/create/page.js"
+      "static/chunks/app/jobs/[id]/page.js"
     ]
   }
 }
