@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 DODO_API_KEY        = os.getenv("DODO_API_KEY", "")
 DODO_WEBHOOK_SECRET = os.getenv("DODO_WEBHOOK_SECRET", "")
-DODO_BASE_URL       = "https://live.dodopayments.com"
+DODO_BASE_URL       = "https://test.dodopayments.com"
 
 PLAN_PRODUCT_IDS: dict[str, str] = {
     "pro": os.getenv("DODO_PRODUCT_ID_PRO", ""),
