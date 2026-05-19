@@ -16,7 +16,7 @@
   --accent-rgb:   8, 145, 178;
   --accent-h-rgb: 14, 116, 144;
   --accent-bg:    #ecfeff;
-  --dot-color:    #b8b8c4;
+  --dot-color:    #7878a0;
 }
 
 html.dark {
@@ -45,6 +45,7 @@ html.dark {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.25s, color 0.25s;
+    overflow-x: hidden;
   }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -124,6 +125,18 @@ html.dark {
   }
   html.dark .shine::after {
     background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+  }
+
+  /* Video pop-in animation */
+  @keyframes video-pop {
+    0%   { transform: scale(0.55) translateY(20px); opacity: 0.4; }
+    60%  { transform: scale(1.03) translateY(-4px); opacity: 1; }
+    80%  { transform: scale(0.98) translateY(2px); }
+    100% { transform: scale(1)    translateY(0);    opacity: 1; }
+  }
+  .video-pop {
+    animation: video-pop 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: top center;
   }
 
   /* Dot-grid background */

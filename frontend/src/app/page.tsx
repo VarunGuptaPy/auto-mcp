@@ -68,7 +68,7 @@ export default function LandingPage() {
   useScrollReveal();
 
   return (
-    <div className="flex flex-col min-h-screen overflow-x-clip">
+    <div className="flex flex-col min-h-screen">
       <CursorGlow />
       <Navbar />
       <main className="flex-1">
@@ -100,34 +100,26 @@ function Hero() {
     router.push(`${dest}&url=${encodeURIComponent(url.trim())}`);
   }
 
-  // Scroll-driven pop: 0.35 → 1.0 scale, negative marginBottom collapses the dead space
+  // Pop animation: trigger once when the video section enters the viewport
   useEffect(() => {
     const el = videoWrapRef.current;
     if (!el) return;
-    const START = 0.35;
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = Math.max(0, Math.min(1, (vh - rect.top) / (vh * 0.85)));
-      const scale = START + progress * (1 - START);
-      const radius = Math.round(28 - progress * 12); // 28px → 16px
-      const gap = el.offsetHeight * (1 - scale);
-      el.style.transform = `scale(${scale.toFixed(4)})`;
-      el.style.transformOrigin = "top center";
-      el.style.borderRadius = `${radius}px`;
-      el.style.marginBottom = `-${gap.toFixed(1)}px`;
-    };
-    // Set initial collapsed state before first paint
-    const initialGap = el.offsetHeight * (1 - START);
-    el.style.marginBottom = `-${initialGap.toFixed(1)}px`;
-    window.addEventListener("scroll", update, { passive: true });
-    update();
-    return () => window.removeEventListener("scroll", update);
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.classList.add("video-pop");
+          io.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   return (
     <section className="hero-bg relative overflow-x-hidden">
-      <div aria-hidden className="absolute inset-0 dot-grid opacity-80 pointer-events-none" />
+      <div aria-hidden className="absolute inset-0 dot-grid pointer-events-none" />
 
       {/* ── Two-column first fold ── */}
       <div className="relative z-10 min-h-[92vh] flex items-center">
@@ -204,10 +196,11 @@ function Hero() {
         </p>
       </div>
 
+      <div className="relative z-10 w-full px-4 sm:px-8 lg:px-16">
       <div
         ref={videoWrapRef}
-        className="relative z-10 w-full will-change-transform origin-top overflow-hidden border border-border"
-        style={{ transform: "scale(0.82)", borderRadius: "20px" }}
+        className="relative overflow-hidden border border-border mx-auto"
+        style={{ borderRadius: "20px", maxWidth: "960px", transform: "scale(0.55)", transformOrigin: "top center" }}
       >
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface-2 shrink-0">
           <div className="flex gap-1.5">
@@ -231,6 +224,7 @@ function Hero() {
             allowFullScreen
           />
         </div>
+      </div>
       </div>
 
       <div className="h-20 relative z-10" />
