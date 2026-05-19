@@ -15,28 +15,41 @@ function CursorGlow() {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const onMove = (e: MouseEvent) => {
-      el.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-    };
+    let raf = 0;
+    let tx = -9999, ty = -9999;
+    let cx = -9999, cy = -9999;
+
+    const onMove = (e: MouseEvent) => { tx = e.clientX; ty = e.clientY; };
     window.addEventListener("mousemove", onMove, { passive: true });
-    return () => window.removeEventListener("mousemove", onMove);
+
+    const tick = () => {
+      cx += (tx - cx) * 0.12;
+      cy += (ty - cy) * 0.12;
+      el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
     <div
       ref={ref}
       aria-hidden
-      className="pointer-events-none fixed top-0 left-0 z-[1] will-change-transform"
+      className="pointer-events-none fixed top-0 left-0 z-[9999] will-change-transform"
       style={{
-        width: 600,
-        height: 600,
-        marginLeft: -300,
-        marginTop: -300,
+        width: 320,
+        height: 320,
+        marginLeft: -160,
+        marginTop: -160,
         borderRadius: "50%",
         background:
-          "radial-gradient(circle, rgb(var(--accent-rgb) / 0.13) 0%, rgb(var(--accent-rgb) / 0.04) 40%, transparent 70%)",
-        filter: "blur(48px)",
-        transition: "transform 0.18s cubic-bezier(0.22,1,0.36,1)",
+          "radial-gradient(circle, rgba(56,189,248,0.22) 0%, rgba(56,189,248,0.10) 30%, rgba(99,102,241,0.06) 55%, transparent 72%)",
+        filter: "blur(32px)",
       }}
     />
   );
