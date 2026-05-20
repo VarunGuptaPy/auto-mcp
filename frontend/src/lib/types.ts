@@ -1,5 +1,6 @@
 export type JobStatus =
   | "queued"
+  | "waiting_for_agent"
   | "code_analysis"
   | "exploring"
   | "analyzing"

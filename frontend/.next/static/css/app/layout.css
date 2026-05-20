@@ -869,6 +869,9 @@ html.dark .btn-primary {
 .mt-2 {
   margin-top: 0.5rem;
 }
+.mt-2\.5 {
+  margin-top: 0.625rem;
+}
 .mt-3 {
   margin-top: 0.75rem;
 }
@@ -1335,6 +1338,9 @@ html.dark .btn-primary {
   margin-top: calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(1.25rem * var(--tw-space-y-reverse));
 }
+.self-start {
+  align-self: flex-start;
+}
 .self-stretch {
   align-self: stretch;
 }
@@ -1569,6 +1575,9 @@ html.dark .btn-primary {
   --tw-bg-opacity: 1;
   background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1));
 }
+.bg-black\/60 {
+  background-color: rgb(0 0 0 / 0.6);
+}
 .bg-black\/70 {
   background-color: rgb(0 0 0 / 0.7);
 }
@@ -1659,6 +1668,9 @@ html.dark .btn-primary {
 .bg-zinc-900 {
   --tw-bg-opacity: 1;
   background-color: rgb(24 24 27 / var(--tw-bg-opacity, 1));
+}
+.bg-white\/5 {
+  background-color: rgb(255 255 255 / 0.05);
 }
 .bg-gradient-to-r {
   background-image: linear-gradient(to right, var(--tw-gradient-stops));
@@ -2098,6 +2110,9 @@ html.dark .btn-primary {
 .placeholder-muted::placeholder {
   color: var(--muted);
 }
+.accent-accent {
+  accent-color: rgb(var(--accent-rgb) / 1);
+}
 .opacity-0 {
   opacity: 0;
 }
@@ -2394,6 +2409,9 @@ html.dark {
   --tw-bg-opacity: 1;
   background-color: rgb(var(--accent-h-rgb) / var(--tw-bg-opacity, 1));
 }
+.hover\:bg-accent\/20:hover {
+  background-color: rgb(var(--accent-rgb) / 0.2);
+}
 .hover\:bg-accent\/5:hover {
   background-color: rgb(var(--accent-rgb) / 0.05);
 }
@@ -2414,6 +2432,9 @@ html.dark {
 }
 .hover\:bg-white\/\[0\.02\]:hover {
   background-color: rgb(255 255 255 / 0.02);
+}
+.hover\:bg-white\/10:hover {
+  background-color: rgb(255 255 255 / 0.1);
 }
 .hover\:text-accent-h:hover {
   --tw-text-opacity: 1;

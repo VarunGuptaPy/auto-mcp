@@ -8,7 +8,13 @@ import ChatPanel from "@/components/ChatPanel";
 import { useSSE } from "@/lib/useSSE";
 import { useAuth } from "@/lib/auth-context";
 import { updateJobByJobId } from "@/lib/firestore";
-import type { ChatMessage, Endpoint, JobState, JobStatus, SSEEvent } from "@/lib/types";
+import type {
+  ChatMessage,
+  Endpoint,
+  JobState,
+  JobStatus,
+  SSEEvent,
+} from "@/lib/types";
 
 // ---- state ----------------------------------------------------------------
 
@@ -60,13 +66,26 @@ function reducer(state: PageState, action: Action): PageState {
         error: action.job.error,
       };
     case "STAGE":
-      return { ...state, status: action.stage, features: action.features ?? state.features };
+      return {
+        ...state,
+        status: action.stage,
+        features: action.features ?? state.features,
+      };
     case "STEP":
-      return { ...state, step: action.step, total: action.total, screenshotUrl: action.url };
+      return {
+        ...state,
+        step: action.step,
+        total: action.total,
+        screenshotUrl: action.url,
+      };
     case "REASONING":
       return { ...state, reasoning: `[${action.action}] ${action.reasoning}` };
     case "NETWORK":
-      return { ...state, endpoints: action.endpoints, endpointsByHost: byHost(action.endpoints) };
+      return {
+        ...state,
+        endpoints: action.endpoints,
+        endpointsByHost: byHost(action.endpoints),
+      };
     case "FEATURES":
       return { ...state, features: action.count };
     case "CODE_DONE":
@@ -81,9 +100,19 @@ function reducer(state: PageState, action: Action): PageState {
 }
 
 const INIT: PageState = {
-  job: null, status: "queued", step: 0, total: 0, features: 0,
-  screenshotUrl: null, reasoning: "", endpoints: [], endpointsByHost: {},
-  error: null, queuePosition: 0, codeRoutes: 0, codeWarning: null,
+  job: null,
+  status: "queued",
+  step: 0,
+  total: 0,
+  features: 0,
+  screenshotUrl: null,
+  reasoning: "",
+  endpoints: [],
+  endpointsByHost: {},
+  error: null,
+  queuePosition: 0,
+  codeRoutes: 0,
+  codeWarning: null,
 };
 
 // ---- component ------------------------------------------------------------
@@ -100,7 +129,13 @@ export default function JobPage() {
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [pendingQuestion, setPendingQuestion] = useState<ChatMessage | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<ChatMessage | null>(
+    null,
+  );
+
+  // Local agent command state
+  const [agentToken, setAgentToken] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Fetch initial job state
   useEffect(() => {
@@ -114,6 +149,13 @@ export default function JobPage() {
       })
       .catch(console.error);
   }, [id, router]);
+
+  // Read agent token from sessionStorage (set during job creation)
+  useEffect(() => {
+    if (!id) return;
+    const token = sessionStorage.getItem(`agent_token:${id}`);
+    setAgentToken(token);
+  }, [id]);
 
   // Elapsed timer — direct DOM update to avoid re-renders
   useEffect(() => {
@@ -129,7 +171,11 @@ export default function JobPage() {
     (ev: SSEEvent) => {
       switch (ev.type) {
         case "stage_change":
-          dispatch({ type: "STAGE", stage: ev.stage, features: ev.features_found });
+          dispatch({
+            type: "STAGE",
+            stage: ev.stage,
+            features: ev.features_found,
+          });
           if (ev.stage === "done") {
             if (user && id) {
               updateJobByJobId(user.uid, id, {
@@ -140,15 +186,26 @@ export default function JobPage() {
             router.push(`/done/${id}`);
           } else if (ev.stage === "failed") {
             if (user && id) {
-              updateJobByJobId(user.uid, id, { status: "failed" }).catch(() => {});
+              updateJobByJobId(user.uid, id, { status: "failed" }).catch(
+                () => {},
+              );
             }
           }
           break;
         case "step_update":
-          dispatch({ type: "STEP", step: ev.step, total: ev.total_steps, url: ev.screenshot_url });
+          dispatch({
+            type: "STEP",
+            step: ev.step,
+            total: ev.total_steps,
+            url: ev.screenshot_url,
+          });
           break;
         case "reasoning":
-          dispatch({ type: "REASONING", reasoning: ev.reasoning, action: ev.action });
+          dispatch({
+            type: "REASONING",
+            reasoning: ev.reasoning,
+            action: ev.action,
+          });
           break;
         case "network_update":
           dispatch({ type: "NETWORK", endpoints: ev.endpoints });
@@ -201,32 +258,34 @@ export default function JobPage() {
         case "chat_answer_received":
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.question_id === ev.question_id ? { ...m, answered: true } : m
-            )
+              m.question_id === ev.question_id ? { ...m, answered: true } : m,
+            ),
           );
           setPendingQuestion((prev) =>
-            prev?.question_id === ev.question_id ? null : prev
+            prev?.question_id === ev.question_id ? null : prev,
           );
           break;
         case "auth_accepted":
           // Close any pending auth question
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.question_type === "credentials" && !m.answered ? { ...m, answered: true } : m
-            )
+              m.question_type === "credentials" && !m.answered
+                ? { ...m, answered: true }
+                : m,
+            ),
           );
           setPendingQuestion((prev) =>
-            prev?.question_type === "credentials" ? null : prev
+            prev?.question_type === "credentials" ? null : prev,
           );
           break;
         case "chat_timeout":
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.question_id === ev.question_id ? { ...m, timed_out: true } : m
-            )
+              m.question_id === ev.question_id ? { ...m, timed_out: true } : m,
+            ),
           );
           setPendingQuestion((prev) =>
-            prev?.question_id === ev.question_id ? null : prev
+            prev?.question_id === ev.question_id ? null : prev,
           );
           break;
         case "user_message":
@@ -244,7 +303,9 @@ export default function JobPage() {
         case "error":
           dispatch({ type: "ERROR", message: ev.message });
           if (user && id) {
-            updateJobByJobId(user.uid, id, { status: "failed" }).catch(() => {});
+            updateJobByJobId(user.uid, id, { status: "failed" }).catch(
+              () => {},
+            );
           }
           break;
       }
@@ -254,16 +315,48 @@ export default function JobPage() {
 
   function handleAnswered(questionId: string) {
     setChatMessages((prev) =>
-      prev.map((m) => (m.question_id === questionId ? { ...m, answered: true } : m))
+      prev.map((m) =>
+        m.question_id === questionId ? { ...m, answered: true } : m,
+      ),
     );
-    setPendingQuestion((prev) => (prev?.question_id === questionId ? null : prev));
+    setPendingQuestion((prev) =>
+      prev?.question_id === questionId ? null : prev,
+    );
   }
 
   useSSE(sseUrl, handleEvent);
 
-  const { status, step, total, features, screenshotUrl, reasoning, endpointsByHost, error, queuePosition, codeRoutes, codeWarning } = state;
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  const tokenDisplay = agentToken ?? "<your-token>";
+  const localCommand =
+    `pip install playwright && playwright install chromium\n` +
+    `python local_agent.py \\\n` +
+    `  --job-id ${id} \\\n` +
+    `  --token ${tokenDisplay} \\\n` +
+    `  --backend-url ${backendUrl}`;
+
+  function copyCommand() {
+    navigator.clipboard.writeText(localCommand).then(() => {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    });
+  }
+
+  const {
+    status,
+    step,
+    total,
+    features,
+    screenshotUrl,
+    reasoning,
+    endpointsByHost,
+    error,
+    queuePosition,
+    codeRoutes,
+    codeWarning,
+  } = state;
   const epCount = state.endpoints.length;
-  const hasCodeAnalysis = !!(state.job?.github_repo);
+  const hasCodeAnalysis = !!state.job?.github_repo;
 
   return (
     <div className="flex flex-col h-screen">
@@ -292,7 +385,6 @@ export default function JobPage() {
 
       {/* Three-column body */}
       <div className="flex-1 grid grid-cols-[220px_1fr_360px] overflow-hidden max-lg:grid-cols-1 max-lg:overflow-y-auto">
-
         {/* Left: timeline */}
         <aside className="border-r border-border p-5 overflow-y-auto">
           <Timeline
@@ -310,21 +402,27 @@ export default function JobPage() {
           )}
 
           <div className="mt-6 pt-5 border-t border-border">
-            <span ref={elapsedRef} className="font-mono text-2xl text-text1 block">0:00</span>
+            <span
+              ref={elapsedRef}
+              className="font-mono text-2xl text-text1 block"
+            >
+              0:00
+            </span>
             <span className="text-xs text-text2">elapsed</span>
           </div>
 
           {status === "queued" && queuePosition > 0 && (
             <div className="mt-4 bg-blue-950/40 border border-blue-800/50 rounded-lg p-3 text-xs text-blue-300">
               <strong>Queue position:</strong> {queuePosition}
-              <br />Waiting for a browser slot…
+              <br />
+              Waiting for a browser slot…
             </div>
           )}
         </aside>
 
         {/* Center: screenshot + reasoning + endpoints (collapsible) */}
         <section className="border-r border-border p-5 flex flex-col gap-4 overflow-y-auto max-lg:border-r-0">
-          {/* Screenshot */}
+          {/* Screenshot / local agent command panel */}
           <div className="relative bg-black rounded-lg overflow-hidden aspect-[16/10] flex items-center justify-center">
             {screenshotUrl ? (
               <>
@@ -338,6 +436,30 @@ export default function JobPage() {
                   step {step}
                 </span>
               </>
+            ) : status === "waiting_for_agent" ? (
+              <div className="flex flex-col w-full h-full p-6 justify-center gap-4">
+                <p className="text-sm text-text1 font-medium">
+                  Run this command on your machine to start exploring:
+                </p>
+                <pre className="font-mono text-xs text-green-400 bg-black/60 border border-border rounded-lg px-4 py-3 leading-relaxed whitespace-pre overflow-x-auto">
+                  {localCommand}
+                </pre>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyCommand}
+                    className="px-3 py-1.5 text-xs bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-md text-accent transition-colors font-medium"
+                  >
+                    {copyFeedback ? "Copied!" : "Copy command"}
+                  </button>
+                  <a
+                    href="/api/local-agent/download"
+                    download="local_agent.py"
+                    className="px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 border border-border rounded-md text-text2 transition-colors font-medium"
+                  >
+                    Download local_agent.py
+                  </a>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted text-sm">
                 <span className="w-5 h-5 border-2 border-muted border-t-accent rounded-full animate-spin" />
@@ -348,8 +470,12 @@ export default function JobPage() {
 
           {/* Reasoning */}
           <div className="bg-surface border border-border rounded-lg p-4">
-            <p className="text-[11px] uppercase tracking-wider text-muted mb-2">Agent reasoning</p>
-            <p className={`text-sm leading-relaxed ${reasoning ? "text-text1" : "text-muted italic"}`}>
+            <p className="text-[11px] uppercase tracking-wider text-muted mb-2">
+              Agent reasoning
+            </p>
+            <p
+              className={`text-sm leading-relaxed ${reasoning ? "text-text1" : "text-muted italic"}`}
+            >
               {reasoning || "Waiting for first step…"}
             </p>
           </div>
@@ -357,24 +483,35 @@ export default function JobPage() {
           {/* Endpoints — collapsible */}
           <details className="bg-surface border border-border rounded-lg overflow-hidden">
             <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-white/[0.02] transition-colors">
-              <span className="text-[11px] uppercase tracking-wider text-muted">Captured endpoints</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">
+                Captured endpoints
+              </span>
               <span className="font-mono text-xs text-accent bg-accent/10 border border-accent/20 rounded px-1.5 py-0.5">
                 {epCount}
               </span>
             </summary>
             <div className="px-4 pb-4 pt-1">
               {epCount === 0 ? (
-                <p className="text-xs text-muted">Endpoints will appear here as the agent explores.</p>
+                <p className="text-xs text-muted">
+                  Endpoints will appear here as the agent explores.
+                </p>
               ) : (
                 <div className="space-y-4">
                   {Object.entries(endpointsByHost).map(([host, eps]) => (
                     <div key={host}>
-                      <p className="font-mono text-[11px] text-muted uppercase tracking-wider mb-2">{host}</p>
+                      <p className="font-mono text-[11px] text-muted uppercase tracking-wider mb-2">
+                        {host}
+                      </p>
                       <ul className="space-y-1">
                         {eps.map((ep, i) => (
-                          <li key={i} className="flex items-start gap-2 py-1 border-b border-border last:border-0">
+                          <li
+                            key={i}
+                            className="flex items-start gap-2 py-1 border-b border-border last:border-0"
+                          >
                             <MethodPill method={ep.method} />
-                            <span className="font-mono text-xs text-text1 break-all">{ep.path}</span>
+                            <span className="font-mono text-xs text-text1 break-all">
+                              {ep.path}
+                            </span>
                           </li>
                         ))}
                       </ul>

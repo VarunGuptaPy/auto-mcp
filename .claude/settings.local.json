@@ -32,7 +32,9 @@
       "Bash(grep \"^\\\\.env$\" /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/.gitignore)",
       "Bash(git *)",
       "Bash(xargs cat)",
-      "WebFetch(domain:dodopayments.com)"
+      "WebFetch(domain:dodopayments.com)",
+      "Bash(xxd /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/local_agent.py)",
+      "Bash(python3 *)"
     ]
   }
 }

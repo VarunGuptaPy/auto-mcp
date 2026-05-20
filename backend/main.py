@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -110,7 +110,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-Agent-Token"],
     allow_credentials=False,
 )
 
@@ -134,10 +134,13 @@ def _safe_product_name(raw: str) -> str:
 class CreateJobRequest(BaseModel):
     url: str
     max_steps: Optional[int] = 50
+    email: Optional[str] = None
+    password: Optional[str] = None
     github_repo: Optional[str] = None          # backwards-compat: single repo
     github_repos: Optional[list[str]] = None   # preferred: multiple repos
     github_token: Optional[str] = None
     github_session_id: Optional[str] = None
+    local_agent: bool = False                  # run browser on user's machine
 
 
 class ProvideCredsRequest(BaseModel):
@@ -159,6 +162,21 @@ class PatchRequest(BaseModel):
 
 class CreateJobResponse(BaseModel):
     job_id: str
+    agent_token: Optional[str] = None  # only present when local_agent=True
+
+
+class AgentStepRequest(BaseModel):
+    screenshot_b64: str
+    elements: list
+    url: str
+    network_events: list
+    step: int
+
+
+class AgentEventRequest(BaseModel):
+    type: str
+    # additional fields are passed through as-is via model_extra
+    model_config = {"extra": "allow"}
 
 
 # --------------------------------------------------------------------------- #
@@ -194,10 +212,21 @@ async def create_job(request: Request, body: CreateJobRequest):
     job_id = manager.create(
         url=body.url,
         max_steps=max_steps,
+        email=body.email,
+        password=body.password,
         github_repos=all_repos,
         github_token=github_token,
+        local_agent=body.local_agent,
     )
-    return CreateJobResponse(job_id=job_id)
+
+    # Return the agent_token at creation time only (it is never persisted publicly)
+    agent_token: str | None = None
+    if body.local_agent:
+        job_state = manager._jobs.get(job_id)
+        if job_state:
+            agent_token = job_state.agent_token
+
+    return CreateJobResponse(job_id=job_id, agent_token=agent_token)
 
 
 @app.post("/api/jobs/{job_id}/credentials")
@@ -416,6 +445,155 @@ async def patch_mcp(request: Request, job_id: str, body: PatchRequest):
 
 
 # --------------------------------------------------------------------------- #
+# Local agent endpoints
+# --------------------------------------------------------------------------- #
+
+def _require_agent_token(job_id: str, x_agent_token: str | None) -> None:
+    """Raise 401/403 if the token is missing or invalid."""
+    if not x_agent_token:
+        raise HTTPException(status_code=401, detail="X-Agent-Token header required.")
+    if not manager.validate_agent_token(job_id, x_agent_token):
+        raise HTTPException(status_code=403, detail="Invalid or expired agent token.")
+
+
+@app.post("/api/jobs/{job_id}/agent/step")
+@limiter.limit("60/minute")
+async def agent_step(
+    request: Request,
+    job_id: str,
+    body: AgentStepRequest,
+    x_agent_token: str | None = Header(default=None),
+):
+    """Local agent posts a snapshot; backend returns the DeepSeek-decided action."""
+    _require_valid_job_id(job_id)
+    _require_agent_token(job_id, x_agent_token)
+
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    # Save screenshot so the frontend can display it
+    import base64 as _b64
+    step = body.step
+    shots_dir = RUNS_DIR / job_id / "trace" / "screenshots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        png_bytes = _b64.standard_b64decode(body.screenshot_b64)
+        (shots_dir / f"step_{step:03d}.png").write_bytes(png_bytes)
+    except Exception:
+        pass  # non-fatal — relay still works without the saved screenshot
+
+    # Hand snapshot to relay loop, wait for action
+    manager.post_snapshot(job_id, {
+        "screenshot_b64": body.screenshot_b64,
+        "elements": body.elements,
+        "url": body.url,
+        "network_events": body.network_events,
+        "step": step,
+    })
+
+    action = await manager.get_agent_action(job_id, timeout=120.0)
+    if action is None:
+        raise HTTPException(status_code=504, detail="Relay timed out computing action.")
+
+    return {"action": action}
+
+
+@app.post("/api/jobs/{job_id}/agent/trace")
+@limiter.limit("5/minute")
+async def agent_trace(
+    request: Request,
+    job_id: str,
+    x_agent_token: str | None = Header(default=None),
+):
+    """Local agent uploads the completed trace.json."""
+    _require_valid_job_id(job_id)
+    _require_agent_token(job_id, x_agent_token)
+
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    body_bytes = await request.body()
+    if len(body_bytes) > 50 * 1024 * 1024:  # 50 MB cap
+        raise HTTPException(status_code=413, detail="Trace too large.")
+
+    try:
+        trace_data = json.loads(body_bytes)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}")
+
+    trace_dir = RUNS_DIR / job_id / "trace"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    (trace_dir / "trace.json").write_text(json.dumps(trace_data, indent=2))
+
+    manager.emit(job_id, {"type": "trace_uploaded", "job_id": job_id})
+    manager.signal_trace_uploaded(job_id)
+
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{job_id}/agent/event")
+@limiter.limit("120/minute")
+async def agent_event(
+    request: Request,
+    job_id: str,
+    body: AgentEventRequest,
+    x_agent_token: str | None = Header(default=None),
+):
+    """Local agent forwards an arbitrary SSE event to connected frontend clients."""
+    _require_valid_job_id(job_id)
+    _require_agent_token(job_id, x_agent_token)
+
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    event_dict = body.model_dump()
+    manager.emit(job_id, event_dict)
+    return {"ok": True}
+
+
+@app.get("/api/jobs/{job_id}/agent/question/{question_id}")
+@limiter.limit("120/minute")
+async def agent_poll_question(
+    request: Request,
+    job_id: str,
+    question_id: str,
+    x_agent_token: str | None = Header(default=None),
+):
+    """Local agent polls for the frontend's answer to a question."""
+    _require_valid_job_id(job_id)
+    _require_agent_token(job_id, x_agent_token)
+
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    answered, answer = manager.peek_agent_answer(question_id)
+    return {"answered": answered, "answer": answer if answered else None}
+
+
+# --------------------------------------------------------------------------- #
+# Local agent download
+# --------------------------------------------------------------------------- #
+
+_LOCAL_AGENT_PATH = Path(__file__).parent.parent / "local_agent.py"
+
+@app.get("/api/local-agent/download")
+@limiter.limit("30/minute")
+async def download_local_agent(request: Request):
+    """Serve local_agent.py for download."""
+    if not _LOCAL_AGENT_PATH.exists():
+        raise HTTPException(status_code=404, detail="local_agent.py not found.")
+    content = _LOCAL_AGENT_PATH.read_bytes()
+    return Response(
+        content=content,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="local_agent.py"'},
+    )
+
+
 # Health check
 # --------------------------------------------------------------------------- #
 

@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -24,6 +25,7 @@ _log = logging.getLogger("auto-mcp")
 class Status:
     QUEUED = "queued"
     CODE_ANALYSIS = "code_analysis"   # new stage when a GitHub repo is provided
+    WAITING_FOR_AGENT = "waiting_for_agent"  # local agent mode: waiting for agent to connect
     EXPLORING = "exploring"
     ANALYZING = "analyzing"
     GENERATING = "generating"
@@ -48,12 +50,16 @@ class JobState:
     queue_position: int = 0
     github_repos: list[str] | None = None   # one or more repo URLs (safe to persist)
     has_code_analysis: bool = False         # True once code stage completes
+    local_agent: bool = False               # True when browser runs on user's machine
+    agent_token: str | None = None          # never persisted publicly
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     def to_public_dict(self) -> dict[str, Any]:
-        return self.to_dict()
+        d = self.to_dict()
+        d.pop("agent_token", None)  # never expose the token over the wire
+        return d
 
 
 class JobManager:
@@ -78,6 +84,13 @@ class JobManager:
         self._user_messages: dict[str, list[str]] = {}
         self._runner: Callable[..., Coroutine] | None = None
         self._max_concurrent = max_concurrent
+        # Local agent support — all in-memory only
+        self._agent_tokens: dict[str, str] = {}           # job_id → token
+        self._agent_snapshots: dict[str, asyncio.Queue] = {}   # job_id → snapshot queue
+        self._agent_pending_actions: dict[str, asyncio.Queue] = {}  # job_id → action queue
+        self._agent_answers: dict[str, Any] = {}          # question_id → answer
+        self._agent_answer_events: dict[str, asyncio.Event] = {}   # question_id → event
+        self._agent_trace_events: dict[str, asyncio.Event] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -168,6 +181,7 @@ class JobManager:
         github_repo: str | None = None,       # backwards-compat single repo
         github_repos: list[str] | None = None,  # preferred: multiple repos
         github_token: str | None = None,  # kept in memory only, NEVER persisted
+        local_agent: bool = False,
     ) -> str:
         job_id = str(uuid.uuid4())
         # Merge single + list into one canonical list
@@ -178,6 +192,7 @@ class JobManager:
             max_steps=max_steps,
             total_steps=max_steps,
             github_repos=repos,
+            local_agent=local_agent,
         )
         state.queue_position = self._queue.qsize()
         self._jobs[job_id] = state
@@ -188,11 +203,118 @@ class JobManager:
         if github_token:
             self._github_tokens[job_id] = github_token   # in-memory only
 
+        if local_agent:
+            token = secrets.token_urlsafe(32)
+            self._agent_tokens[job_id] = token
+            state.agent_token = token  # stored on state but excluded from to_public_dict()
+            # Pre-create the queues so the relay can await them immediately
+            self._agent_snapshots[job_id] = asyncio.Queue()
+            self._agent_pending_actions[job_id] = asyncio.Queue()
+            self._agent_trace_events[job_id] = asyncio.Event()
+
         job_dir = self._runs_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
         self._persist(job_id)
         self._queue.put_nowait(job_id)
         return job_id
+
+    # ------------------------------------------------------------------
+    # Local agent — token validation
+    # ------------------------------------------------------------------
+
+    def validate_agent_token(self, job_id: str, token: str) -> bool:
+        stored = self._agent_tokens.get(job_id)
+        return stored is not None and secrets.compare_digest(stored, token)
+
+    # ------------------------------------------------------------------
+    # Local agent — snapshot relay (step endpoint ↔ runner relay loop)
+    # ------------------------------------------------------------------
+
+    def post_snapshot(self, job_id: str, snapshot: dict) -> None:
+        """HTTP step handler calls this to hand a snapshot to the relay loop."""
+        q = self._agent_snapshots.get(job_id)
+        if q is not None:
+            q.put_nowait(snapshot)
+
+    async def get_snapshot(self, job_id: str, timeout: float = 300.0) -> dict | None:
+        """Relay loop calls this to wait for the next snapshot from the local agent."""
+        q = self._agent_snapshots.get(job_id)
+        if q is None:
+            return None
+        try:
+            return await asyncio.wait_for(q.get(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+
+    def post_agent_action(self, job_id: str, action: dict) -> None:
+        """Relay loop calls this to return an action to the HTTP step handler."""
+        q = self._agent_pending_actions.get(job_id)
+        if q is not None:
+            q.put_nowait(action)
+
+    async def get_agent_action(self, job_id: str, timeout: float = 120.0) -> dict | None:
+        """HTTP step handler calls this to wait for the relay loop's decision."""
+        q = self._agent_pending_actions.get(job_id)
+        if q is None:
+            return None
+        try:
+            return await asyncio.wait_for(q.get(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+
+    # ------------------------------------------------------------------
+    # Local agent — question/answer (frontend answers, local agent polls)
+    # ------------------------------------------------------------------
+
+    def post_agent_answer(self, job_id: str, question_id: str, answer: Any) -> None:
+        """Called when the frontend submits an answer to a question raised by the relay."""
+        self._agent_answers[question_id] = answer
+        event = self._agent_answer_events.get(question_id)
+        if event is not None:
+            event.set()
+
+    async def get_agent_answer(
+        self, job_id: str, question_id: str, timeout: float = 86400.0
+    ) -> Any:
+        """Relay loop (or HTTP poll endpoint) waits for the frontend's answer."""
+        event = asyncio.Event()
+        self._agent_answer_events[question_id] = event
+        # If answer already arrived (race), return immediately
+        if question_id in self._agent_answers:
+            self._agent_answer_events.pop(question_id, None)
+            return self._agent_answers.pop(question_id)
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            self._agent_answer_events.pop(question_id, None)
+            return None
+        self._agent_answer_events.pop(question_id, None)
+        return self._agent_answers.pop(question_id, None)
+
+    def peek_agent_answer(self, question_id: str) -> tuple[bool, Any]:
+        """Non-blocking check used by the polling HTTP endpoint."""
+        if question_id in self._agent_answers:
+            return True, self._agent_answers[question_id]
+        return False, None
+
+    # ------------------------------------------------------------------
+    # Local agent — trace upload signal
+    # ------------------------------------------------------------------
+
+    def signal_trace_uploaded(self, job_id: str) -> None:
+        event = self._agent_trace_events.get(job_id)
+        if event is not None:
+            event.set()
+
+    async def wait_for_trace(self, job_id: str, timeout: float = 86400.0) -> bool:
+        event = self._agent_trace_events.get(job_id)
+        if event is None:
+            return False
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     def get(self, job_id: str) -> dict | None:
         state = self._jobs.get(job_id)

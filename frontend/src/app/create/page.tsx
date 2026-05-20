@@ -44,6 +44,7 @@ function CreateContent() {
   const [oauthEnabled, setOauthEnabled] = useState(false);
   const [oauthBusy,    setOauthBusy]    = useState(false);
   const [githubUser,   setGithubUser]   = useState<GitHubUser | null>(null);
+  const [localAgent,   setLocalAgent]   = useState(false);
   const sessionRef = useRef<string | null>(null);
 
   // Auth guard
@@ -92,6 +93,7 @@ function CreateContent() {
       const body: Record<string, unknown> = {
         url: url.trim(),
         max_steps: maxSteps || null,
+        local_agent: localAgent,
       };
       const validRepos = githubRepos.map((r) => r.trim()).filter(Boolean);
       if (validRepos.length > 0) {
@@ -114,6 +116,11 @@ function CreateContent() {
 
       // Track in Firestore
       try { await saveJobStart(user.uid, data.job_id, url.trim()); } catch {}
+
+      // Store agent token if returned (local agent mode)
+      if (data.agent_token) {
+        sessionStorage.setItem(`agent_token:${data.job_id}`, data.agent_token);
+      }
 
       router.push(`/jobs/${data.job_id}`);
     } catch (e) {
@@ -193,6 +200,44 @@ function CreateContent() {
                   ) : "Explore →"}
                 </button>
               </div>
+            </div>
+
+            {/* Execution mode */}
+            <div>
+              <label className="block text-xs text-text2 mb-2">Execution mode</label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exec-mode"
+                    checked={!localAgent}
+                    onChange={() => setLocalAgent(false)}
+                    className="mt-0.5 accent-accent"
+                  />
+                  <div>
+                    <span className="text-sm text-text1">Run on server</span>
+                    <span className="text-xs text-muted ml-2">We run the browser for you. Easy, no setup needed.</span>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exec-mode"
+                    checked={localAgent}
+                    onChange={() => setLocalAgent(true)}
+                    className="mt-0.5 accent-accent"
+                  />
+                  <div>
+                    <span className="text-sm text-text1">Run locally</span>
+                    <span className="text-xs text-muted ml-2">Faster, uses your own machine. Download a script after creating the job.</span>
+                  </div>
+                </label>
+              </div>
+              {localAgent && (
+                <div className="mt-2.5 bg-bg border border-border rounded-lg px-3 py-2.5 text-xs text-text2 leading-relaxed">
+                  Your browser will explore the site. We handle the AI. Requires Python + Playwright.
+                </div>
+              )}
             </div>
 
             {/* GitHub section */}
