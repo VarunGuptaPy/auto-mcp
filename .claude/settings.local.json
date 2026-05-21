@@ -34,7 +34,9 @@
       "Bash(xargs cat)",
       "WebFetch(domain:dodopayments.com)",
       "Bash(xxd /Users/varungupta/Desktop/varunCrazyProject/auto-mcp/local_agent.py)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(kill 73803)",
+      "Bash(kill -9 73803)"
     ]
   }
 }

@@ -41,6 +41,7 @@ import argparse
 import asyncio
 import base64
 import json
+import threading
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Any
@@ -263,11 +264,29 @@ def _http_get(url: str, headers: dict, retries: int = 3) -> dict:
     sys.exit(1)  # unreachable, satisfies type checker
 
 
-def _http_post(url: str, headers: dict, body: dict, retries: int = 3) -> dict | None:
+def _http_get_bytes(url: str, headers: dict, retries: int = 3) -> bytes | None:
+    """GET url, return raw bytes. Used for downloading uploaded files."""
+    dl_headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+    for attempt in range(retries):
+        try:
+            resp = _requests.get(url, headers=dl_headers, timeout=60)
+            if resp.ok:
+                return resp.content
+            print(f"[auto-mcp] GET {url} returned {resp.status_code}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+        except _requests.RequestException as e:
+            print(f"[auto-mcp] GET {url} failed: {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return None
+
+
+def _http_post(url: str, headers: dict, body: dict, retries: int = 3, timeout: int = 86400) -> dict | None:
     """POST body to url with retry. Returns parsed JSON on success, None on non-fatal error."""
     for attempt in range(retries):
         try:
-            resp = _requests.post(url, headers=headers, json=body, timeout=60)
+            resp = _requests.post(url, headers=headers, json=body, timeout=timeout)
             if resp.ok:
                 try:
                     return resp.json()
@@ -363,6 +382,78 @@ def _poll_question(
 
 
 # ------------------------------------------------------------------ #
+# Local file-upload intercept (local runs only)
+# ------------------------------------------------------------------ #
+
+def _local_file_upload_thread(
+    backend_url: str,
+    job_id: str,
+    auth_headers: dict,
+    stop_event: threading.Event,
+) -> None:
+    """Background thread (local runs only): watches for file-upload questions,
+    asks the user to upload directly in the Playwright browser, then answers
+    the question with an empty string so the backend unblocks.
+    The local_agent step handler skips set_input_files when answer is empty,
+    and the next screenshot captures whatever the user uploaded in the browser.
+    """
+    url = f"{backend_url}/api/jobs/{job_id}/events"
+    headers = {k: v for k, v in auth_headers.items() if k.lower() != "content-type"}
+    handled: set[str] = set()
+
+    try:
+        with _requests.get(url, headers=headers, stream=True, timeout=86400) as resp:
+            buf = ""
+            for chunk in resp.iter_content(chunk_size=None, decode_unicode=True):
+                if stop_event.is_set():
+                    break
+                if not chunk:
+                    continue
+                buf += chunk
+                while "\n\n" in buf:
+                    frame, buf = buf.split("\n\n", 1)
+                    data_line = next(
+                        (ln[6:] for ln in frame.split("\n") if ln.startswith("data: ")),
+                        None,
+                    )
+                    if not data_line:
+                        continue
+                    try:
+                        event = json.loads(data_line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if (
+                        event.get("type") == "chat_question"
+                        and event.get("question_type") == "file_upload"
+                    ):
+                        qid: str = event["question_id"]
+                        if qid in handled:
+                            continue
+                        handled.add(qid)
+
+                        print(
+                            "\n"
+                            "  ┌─────────────────────────────────────────────────────┐\n"
+                            "  │  FILE UPLOAD REQUIRED                               │\n"
+                            "  │  Go to the browser window Playwright opened,        │\n"
+                            "  │  click the upload button and select your file.      │\n"
+                            "  └─────────────────────────────────────────────────────┘"
+                        )
+                        input("  Press Enter here once you have uploaded the file... ")
+
+                        # Unblock the backend — empty answer skips set_input_files
+                        _http_post(
+                            f"{backend_url}/api/jobs/{job_id}/chat",
+                            headers=auth_headers,
+                            body={"question_id": qid, "answer": ""},
+                        )
+    except Exception as exc:
+        if not stop_event.is_set():
+            print(f"  [file-upload thread] stopped: {exc}")
+
+
+# ------------------------------------------------------------------ #
 # Main explore loop
 # ------------------------------------------------------------------ #
 
@@ -397,6 +488,14 @@ async def explore(
     network_buffer: list[dict] = []
 
     # ---- 3. Launch browser -------------------------------------------
+    _fu_stop = threading.Event()
+    threading.Thread(
+        target=_local_file_upload_thread,
+        args=(backend_url, job_id, dict(auth_headers), _fu_stop),
+        daemon=True,
+        name="local-file-upload",
+    ).start()
+
     print(f"[auto-mcp] Launching {'headless' if headless else 'visible'} browser ...")
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=headless)
@@ -478,22 +577,48 @@ async def explore(
                 break
 
             # ---- ask_user / auth_required ----------------------------
+            # The backend relay already blocked waiting for the user's answer
+            # before returning this action. The answer is embedded in
+            # action["answer"] and in the backend's qa_history for DeepSeek.
             if kind in ("ask_user", "auth_required"):
-                question = action.get("question", "The agent has a question for you.")
-                question_id = action.get("question_id") or result.get("question_id") or f"q-{job_id}-{step}"
+                question = action.get("question", "")
+                if question:
+                    print(f"\n  [answered via dashboard] {question}")
 
-                print(f"\n  QUESTION: {question}")
-                print(f"  (Answer via dashboard or wait for backend to relay ...)")
-
-                # Poll backend until the question is answered
-                _poll_question(
-                    backend_url=backend_url,
-                    job_id=job_id,
-                    question_id=question_id,
-                    headers=auth_headers,
-                )
-                # Don't execute a browser action — the backend handles routing
-                # the answer back into context on the next step call.
+                # File upload: the user uploaded a file to the backend server.
+                # Download it here and call set_input_files on the local browser.
+                if (
+                    kind == "ask_user"
+                    and action.get("question_type") == "file_upload"
+                    and action.get("answer")
+                    and action.get("aid")
+                ):
+                    import os as _os
+                    import tempfile as _tempfile
+                    remote_path: str = action["answer"]          # e.g. "uploads/abc.jpg"
+                    filename = remote_path.split("/")[-1]
+                    dl_url = f"{backend_url}/api/jobs/{job_id}/uploads/{filename}"
+                    print(f"  [file upload] downloading {filename} from backend …")
+                    file_bytes = _http_get_bytes(dl_url, headers=auth_headers)
+                    if file_bytes:
+                        suffix = _os.path.splitext(filename)[1] or ".bin"
+                        with _tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                            tmp.write(file_bytes)
+                            tmp_path = tmp.name
+                        try:
+                            await _execute(page, {
+                                "action": "upload_file",
+                                "aid": action["aid"],
+                                "path": tmp_path,
+                            })
+                            await _wait_stable(page)
+                            print(f"  [file upload] set_input_files succeeded for {action['aid']}")
+                        except Exception as e:
+                            print(f"  [file upload] set_input_files error: {e}")
+                        finally:
+                            _os.unlink(tmp_path)
+                    else:
+                        print(f"  [file upload] could not download {filename} — skipping")
                 continue
 
             # ---- execute browser action ------------------------------
@@ -506,6 +631,8 @@ async def explore(
 
         await context.close()
         await browser.close()
+
+    _fu_stop.set()
 
     # ---- 5. Finalise trace -------------------------------------------
     trace.ended_at = time.time()

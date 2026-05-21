@@ -492,7 +492,7 @@ async def agent_step(
         "step": step,
     })
 
-    action = await manager.get_agent_action(job_id, timeout=120.0)
+    action = await manager.get_agent_action(job_id, timeout=86400.0)  # 24 h — waits for user answers
     if action is None:
         raise HTTPException(status_code=504, detail="Relay timed out computing action.")
 
@@ -577,6 +577,26 @@ async def agent_poll_question(
 # --------------------------------------------------------------------------- #
 # Local agent download
 # --------------------------------------------------------------------------- #
+
+@app.get("/api/jobs/{job_id}/uploads/{filename}")
+@limiter.limit("30/minute")
+async def get_upload(
+    request: Request,
+    job_id: str,
+    filename: str,
+    x_agent_token: str | None = Header(default=None),
+):
+    """Let the local agent download a file the user uploaded via the dashboard."""
+    _require_valid_job_id(job_id)
+    _require_agent_token(job_id, x_agent_token)
+    safe = _SAFE_FILENAME_RE.sub("", filename.lower())
+    if not safe:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    path = RUNS_DIR / job_id / "uploads" / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Upload not found.")
+    return FileResponse(path)
+
 
 _LOCAL_AGENT_PATH = Path(__file__).parent.parent / "local_agent.py"
 
