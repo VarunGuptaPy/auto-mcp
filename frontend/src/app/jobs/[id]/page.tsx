@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Timeline from "@/components/Timeline";
 import MethodPill from "@/components/MethodPill";
 import ChatPanel from "@/components/ChatPanel";
+import SiteMapPanel from "@/components/SiteMapPanel";
 import { useSSE } from "@/lib/useSSE";
 import { useAuth } from "@/lib/auth-context";
 import { updateJobByJobId } from "@/lib/firestore";
@@ -14,6 +15,7 @@ import type {
   JobState,
   JobStatus,
   SSEEvent,
+  SiteMapData,
 } from "@/lib/types";
 
 // ---- state ----------------------------------------------------------------
@@ -33,6 +35,9 @@ interface PageState {
   queueLength: number;
   codeRoutes: number;
   codeWarning: string | null;
+  siteMap: SiteMapData | null;
+  reconstructionProgress: Record<string, string>;
+  reconstructedCount: number;
 }
 
 type Action =
@@ -45,7 +50,9 @@ type Action =
   | { type: "CODE_DONE"; routes: number }
   | { type: "CODE_WARN"; message: string }
   | { type: "ERROR"; message: string }
-  | { type: "QUEUE_POS"; position: number; queueLength: number };
+  | { type: "QUEUE_POS"; position: number; queueLength: number }
+  | { type: "SITE_MAP_BUILT"; pages: number; features: number; features_with_endpoints: number; features_needing_reconstruction: number }
+  | { type: "RECON_PROGRESS"; feature_id: string; feature_name: string; status: string; implementation_type: string };
 
 function byHost(endpoints: Endpoint[]): Record<string, Endpoint[]> {
   return endpoints.reduce<Record<string, Endpoint[]>>((acc, ep) => {
@@ -99,6 +106,21 @@ function reducer(state: PageState, action: Action): PageState {
       return { ...state, status: "failed", error: action.message };
     case "QUEUE_POS":
       return { ...state, queuePosition: action.position, queueLength: action.queueLength };
+    case "SITE_MAP_BUILT": {
+      // Build a skeleton SiteMapData from the summary event
+      const skeletonMap: SiteMapData = {
+        pages: [],
+        total_features: action.features,
+        features_with_endpoints: action.features_with_endpoints,
+        features_needing_reconstruction: action.features_needing_reconstruction,
+      };
+      return { ...state, siteMap: skeletonMap };
+    }
+    case "RECON_PROGRESS": {
+      const newProgress = { ...state.reconstructionProgress, [action.feature_id]: action.status };
+      const doneCount = Object.values(newProgress).filter((s) => s === "done").length;
+      return { ...state, reconstructionProgress: newProgress, reconstructedCount: doneCount };
+    }
     default:
       return state;
   }
@@ -119,6 +141,9 @@ const INIT: PageState = {
   queueLength: 0,
   codeRoutes: 0,
   codeWarning: null,
+  siteMap: null,
+  reconstructionProgress: {},
+  reconstructedCount: 0,
 };
 
 // ---- component ------------------------------------------------------------
@@ -130,7 +155,7 @@ export default function JobPage() {
   const [state, dispatch] = useReducer(reducer, INIT);
   const startTimeRef = useRef<number>(Date.now());
   const elapsedRef = useRef<HTMLSpanElement>(null);
-  const isTerminal = state.status === "done" || state.status === "failed";
+  const isTerminal = state.status === "done" || state.status === "failed" || state.status === "stopped";
   const sseUrl = id && !isTerminal ? `/api/jobs/${id}/events` : null;
 
   // Chat state
@@ -142,6 +167,19 @@ export default function JobPage() {
   // Local agent command state
   const [agentToken, setAgentToken] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [stopping, setStopping] = useState(false);
+
+  async function stopJob() {
+    if (!id || stopping || isTerminal) return;
+    setStopping(true);
+    try {
+      await fetch(`/api/jobs/${id}/stop`, { method: "POST" });
+    } catch {
+      // SSE will update the status regardless
+    } finally {
+      setStopping(false);
+    }
+  }
 
   // Fetch initial job state
   useEffect(() => {
@@ -225,6 +263,24 @@ export default function JobPage() {
         case "code_analysis_warning":
           dispatch({ type: "CODE_WARN", message: ev.message });
           break;
+        case "site_map_built":
+          dispatch({
+            type: "SITE_MAP_BUILT",
+            pages: ev.pages,
+            features: ev.features,
+            features_with_endpoints: ev.features_with_endpoints,
+            features_needing_reconstruction: ev.features_needing_reconstruction,
+          });
+          break;
+        case "reconstruction_progress":
+          dispatch({
+            type: "RECON_PROGRESS",
+            feature_id: ev.feature_id,
+            feature_name: ev.feature_name,
+            status: ev.status,
+            implementation_type: ev.implementation_type,
+          });
+          break;
         case "chat_question": {
           const msg: ChatMessage = {
             id: `q-${ev.question_id}`,
@@ -236,6 +292,7 @@ export default function JobPage() {
             fields: ev.fields,
             choices: ev.choices,
             answered: false,
+            feature_context: ev.feature_context,
           };
           setChatMessages((prev) => {
             // Deduplicate on replay
@@ -306,6 +363,9 @@ export default function JobPage() {
             },
           ]);
           break;
+        case "stopped":
+          dispatch({ type: "STAGE", stage: "stopped" });
+          break;
         case "error":
           dispatch({ type: "ERROR", message: ev.message });
           if (user && id) {
@@ -364,9 +424,15 @@ export default function JobPage() {
     queueLength,
     codeRoutes,
     codeWarning,
+    siteMap,
+    reconstructionProgress,
+    reconstructedCount,
   } = state;
   const epCount = state.endpoints.length;
   const hasCodeAnalysis = !!state.job?.github_repo;
+  const hasSiteMap = siteMap !== null || [
+    "site_mapping", "classifying", "questioning", "reconstructing",
+  ].includes(status);
 
   return (
     <div className="flex flex-col h-screen">
@@ -379,6 +445,20 @@ export default function JobPage() {
           {state.job?.url ?? "…"}
         </span>
         <div className="flex-1" />
+        {!isTerminal && (
+          <button
+            onClick={stopJob}
+            disabled={stopping}
+            className="text-xs px-3 py-1.5 border border-danger/50 rounded-md text-danger hover:bg-danger/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+          >
+            {stopping ? (
+              <span className="w-3 h-3 border-2 border-danger/30 border-t-danger rounded-full animate-spin" />
+            ) : (
+              <span className="w-2 h-2 rounded-sm bg-danger" />
+            )}
+            Stop
+          </button>
+        )}
         <button
           onClick={() => router.push("/dashboard")}
           className="text-xs px-3 py-1.5 border border-border rounded-md text-text2 hover:border-muted transition-colors"
@@ -403,8 +483,10 @@ export default function JobPage() {
             total={total}
             features={features}
             hasCodeAnalysis={hasCodeAnalysis}
+            hasSiteMap={hasSiteMap}
             codeRoutes={codeRoutes}
             queuePosition={queuePosition}
+            reconstructedCount={reconstructedCount}
           />
           {codeWarning && (
             <div className="mt-3 bg-yellow-950/30 border border-yellow-800/40 rounded-lg p-2.5 text-[11px] text-yellow-400/80 leading-relaxed">
@@ -590,8 +672,30 @@ export default function JobPage() {
             </div>
           </details>
 
+          {/* Site Map Panel — shown once site_mapping begins */}
+          {siteMap && (
+            <SiteMapPanel
+              siteMap={siteMap}
+              reconstructionProgress={reconstructionProgress}
+            />
+          )}
+
+          {/* Stopped banner */}
+          {status === "stopped" && (
+            <div className="bg-zinc-900/80 border border-zinc-600/50 rounded-lg px-4 py-3 text-zinc-300 text-sm">
+              <p className="font-medium mb-1">Job stopped</p>
+              <p className="text-zinc-400 text-xs">You stopped this job. Any features captured so far were not saved.</p>
+              <button
+                onClick={() => router.push("/create")}
+                className="mt-3 text-xs px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded-md text-zinc-200 transition-colors"
+              >
+                ← Start a new job
+              </button>
+            </div>
+          )}
+
           {/* Error banner */}
-          {error && (
+          {error && status !== "stopped" && (
             <div className="bg-red-950/50 border border-danger/50 rounded-lg px-4 py-3 text-danger text-sm">
               <p className="font-medium mb-1">Job failed</p>
               <p className="text-danger/80 text-xs">{error}</p>

@@ -243,6 +243,13 @@ function MessageBubble({
         {msg.answered && <span className="text-[10px] text-green-400 ml-auto">✓ answered</span>}
         {msg.timed_out && <span className="text-[10px] text-muted ml-auto">timed out</span>}
       </div>
+      {msg.feature_context && (
+        <div className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-accent/5 border border-accent/15">
+          <span className="text-[10px] text-accent">For feature:</span>
+          <span className="text-[10px] font-medium text-text1">{msg.feature_context.feature_name}</span>
+          <span className="text-[9px] text-muted ml-auto">{msg.feature_context.feature_type.replace("_", " ")}</span>
+        </div>
+      )}
       <p className="text-sm text-text1 leading-relaxed mb-3">{msg.text}</p>
 
       {isActive && (msg.question_type === "credentials" || isEnvVars) && (

@@ -310,6 +310,20 @@ async def chat_answer(request: Request, job_id: str, body: ChatAnswerRequest):
     return {"ok": True}
 
 
+@app.post("/api/jobs/{job_id}/stop")
+@limiter.limit("10/minute")
+async def stop_job(request: Request, job_id: str):
+    """Cancel a running or queued job."""
+    _require_valid_job_id(job_id)
+    job = manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    cancelled = manager.cancel(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=409, detail="Job is already complete.")
+    return {"ok": True}
+
+
 @app.get("/api/jobs/{job_id}")
 @limiter.limit("60/minute")
 async def get_job(request: Request, job_id: str):

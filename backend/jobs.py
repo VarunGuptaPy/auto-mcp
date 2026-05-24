@@ -27,12 +27,17 @@ class Status:
     CODE_ANALYSIS = "code_analysis"   # new stage when a GitHub repo is provided
     WAITING_FOR_AGENT = "waiting_for_agent"  # local agent mode: waiting for agent to connect
     EXPLORING = "exploring"
+    SITE_MAPPING = "site_mapping"     # building website feature map from trace
+    CLASSIFYING = "classifying"       # classifying each feature's implementation type
+    QUESTIONING = "questioning"       # asking user questions for feature reconstruction
+    RECONSTRUCTING = "reconstructing" # generating code implementations from answers
     ANALYZING = "analyzing"
     GENERATING = "generating"
     DONE = "done"
     FAILED = "failed"
+    STOPPED = "stopped"              # cancelled by user
 
-    TERMINAL = {DONE, FAILED}
+    TERMINAL = {DONE, FAILED, STOPPED}
 
 
 @dataclass
@@ -94,6 +99,9 @@ class JobManager:
         self._agent_answers: dict[str, Any] = {}          # question_id → answer
         self._agent_answer_events: dict[str, asyncio.Event] = {}   # question_id → event
         self._agent_trace_events: dict[str, asyncio.Event] = {}
+        # Cancellation — one event + task reference per active job
+        self._cancel_events: dict[str, asyncio.Event] = {}
+        self._job_tasks: dict[str, asyncio.Task] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -124,6 +132,9 @@ class JobManager:
 
     async def _run_job(self, job_id: str) -> None:
         """Run one job and release the semaphore when done."""
+        # Track this task so cancel() can interrupt it
+        self._job_tasks[job_id] = asyncio.current_task()
+        self._cancel_events[job_id] = asyncio.Event()
         try:
             job = self._jobs.get(job_id)
             if job is None or self._runner is None:
@@ -134,14 +145,60 @@ class JobManager:
             try:
                 await self._runner(job_id, job.url, job.max_steps, creds, self,
                                    github_token=github_token)
+            except asyncio.CancelledError:
+                self.update(job_id, status=Status.STOPPED, error="Stopped by user.", current_action=None)
+                self.emit(job_id, {"type": "stopped"})
             except asyncio.TimeoutError:
                 self.update(job_id, status=Status.FAILED, error="Job timed out.")
                 self.emit(job_id, {"type": "error", "message": "Job timed out."})
             except Exception as exc:
                 _log.error("Job %s failed: %s", job_id, exc)
         finally:
+            self._job_tasks.pop(job_id, None)
+            self._cancel_events.pop(job_id, None)
             self._active_count -= 1
             self._semaphore.release()
+
+    # ------------------------------------------------------------------
+    # Cancellation
+    # ------------------------------------------------------------------
+
+    def cancel(self, job_id: str) -> bool:
+        """
+        Request cancellation of a running job.
+        Returns True if the job was active and cancellation was requested,
+        False if the job is not running (already terminal or queued-only).
+        """
+        state = self._jobs.get(job_id)
+        if state is None or state.status in Status.TERMINAL:
+            return False
+
+        # If still queued (task not started yet), mark stopped immediately
+        if state.status == Status.QUEUED:
+            self.update(job_id, status=Status.STOPPED, error="Stopped by user.", current_action=None)
+            self.emit(job_id, {"type": "stopped"})
+            try:
+                self._pending_order.remove(job_id)
+            except ValueError:
+                pass
+            return True
+
+        # Signal the cancel event (runner checks this at safe points)
+        event = self._cancel_events.get(job_id)
+        if event:
+            event.set()
+
+        # Cancel the asyncio task — raises CancelledError inside the runner
+        task = self._job_tasks.get(job_id)
+        if task and not task.done():
+            task.cancel()
+
+        return True
+
+    def is_cancelled(self, job_id: str) -> bool:
+        """Check whether cancellation has been requested for this job."""
+        event = self._cancel_events.get(job_id)
+        return event is not None and event.is_set()
 
     def _broadcast_queue_positions(self) -> None:
         """Emit a queue_position SSE event to every waiting job with its new position."""

@@ -47,7 +47,7 @@ def _build_input_schema(feature: dict) -> dict:
     properties: dict = {}
     required: list[str] = []
 
-    endpoint = feature.get("endpoint", {})
+    endpoint = feature.get("endpoint") or {}
     url_t = endpoint.get("url_template", "")
 
     # Path params — always required
@@ -237,7 +237,8 @@ def render_direct_tool(feature: dict) -> str:
 
 
 def render_tool(feature: dict) -> str:
-    if feature.get("implementation_type") == "direct_code" and feature.get("code_snippet"):
+    impl_type = feature.get("implementation_type", "")
+    if impl_type in ("direct_code", "reconstructed") and feature.get("code_snippet"):
         return render_direct_tool(feature)
 
     endpoint = feature.get("endpoint") or {}
@@ -264,6 +265,45 @@ def render_tool(feature: dict) -> str:
         body_param_names=body_props,
         required=schema["required"],
     )
+
+
+REQUIREMENTS_BY_IMPORT = {
+    "psycopg2": "psycopg2-binary>=2.9.0",
+    "mysql.connector": "mysql-connector-python>=8.0.0",
+    "pymongo": "pymongo>=4.0.0",
+    "supabase": "supabase>=2.0.0",
+    "openai": "openai>=1.35.0",
+    "anthropic": "anthropic>=0.29.0",
+    "google.generativeai": "google-generativeai>=0.7.0",
+    "cohere": "cohere>=5.0.0",
+    "boto3": "boto3>=1.34.0",
+    "google.cloud.storage": "google-cloud-storage>=2.0.0",
+    "firebase_admin": "firebase-admin>=6.0.0",
+    "jose": "python-jose[cryptography]>=3.3.0",
+    "redis": "redis>=5.0.0",
+    "sqlalchemy": "sqlalchemy>=2.0.0",
+}
+
+
+def _extract_package(import_line: str) -> str:
+    """Extract the top-level package name from an import statement."""
+    line = import_line.strip()
+    if line.startswith("from "):
+        return line.split()[1].split(".")[0]
+    if line.startswith("import "):
+        return line.split()[1].split(".")[0].split(",")[0].strip()
+    return ""
+
+
+def _collect_requirements(spec: dict) -> list[str]:
+    """Build a dynamic requirements.txt from what the features actually import."""
+    reqs: set[str] = {"mcp>=1.0.0", "httpx>=0.27.0"}
+    for feature in spec.get("features", []):
+        for imp_line in feature.get("code_imports") or []:
+            pkg = _extract_package(imp_line)
+            if pkg and pkg in REQUIREMENTS_BY_IMPORT:
+                reqs.add(REQUIREMENTS_BY_IMPORT[pkg])
+    return sorted(reqs)
 
 
 def generate(spec: dict, out_dir: str | Path, user_env: dict | None = None) -> None:
@@ -302,7 +342,7 @@ def generate(spec: dict, out_dir: str | Path, user_env: dict | None = None) -> N
         )
 
     (out_dir / "server.py").write_text(server_code)
-    (out_dir / "requirements.txt").write_text("mcp>=1.0.0\nhttpx>=0.27.0\n")
+    (out_dir / "requirements.txt").write_text("\n".join(_collect_requirements(spec)) + "\n")
 
     # Write .env.example with detected env vars (values omitted for security)
     env_vars = spec.get("env_vars") or []

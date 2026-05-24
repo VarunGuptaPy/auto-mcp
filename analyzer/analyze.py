@@ -209,6 +209,217 @@ Produce the feature spec JSON.
     return spec
 
 
+async def analyze_v2(
+    trace_path: str | Path,
+    out_dir: str | Path,
+    question_callback,
+    code_routes: list | None = None,
+    vector_store=None,
+) -> dict:
+    """
+    Enhanced analysis pipeline with site mapping, feature classification,
+    targeted Q&A, and code reconstruction for features without endpoints.
+
+    Args:
+        trace_path: Path to trace.json from the explorer.
+        out_dir: Job directory (site_map.json and feature_spec.json written here).
+        question_callback: Async callable with signature:
+            async def _ask(question_id, text, question_type, fields=None,
+                           choices=None, feature_context=None) -> str | dict | None
+        code_routes: Optional list of routes from static code analysis.
+        vector_store: Optional CodeVectorStore for code-context hints.
+
+    Returns:
+        feature_spec dict (also written to out_dir/feature_spec.json).
+    """
+    import uuid
+    from analyzer.site_mapper import build_site_map
+    from analyzer.feature_classifier import classify_all
+    from analyzer.question_generator import generate_questions, get_secret_fields
+    from analyzer.reconstructor import reconstruct
+
+    trace_path = Path(trace_path)
+    out_dir = Path(out_dir)
+
+    # ------------------------------------------------------------------ #
+    # 2a: Build site map
+    # ------------------------------------------------------------------ #
+    site_map = build_site_map(trace_path, out_dir)
+
+    # ------------------------------------------------------------------ #
+    # 2b: Classify features
+    # ------------------------------------------------------------------ #
+    classify_all(site_map, vector_store)
+
+    all_features = [f for p in site_map.pages for f in p.features]
+
+    # ------------------------------------------------------------------ #
+    # 2c: Generate question plans for reconstruction features
+    # ------------------------------------------------------------------ #
+    shared_answers: dict[str, str] = {}
+    plans = generate_questions(all_features, shared_answers)
+
+    answers_by_feature: dict[str, dict[str, str]] = {}
+
+    for plan in plans:
+        feature_context = {
+            "feature_id": plan.feature_id,
+            "feature_name": plan.feature_name,
+            "feature_type": plan.feature_type,
+        }
+        feature_answers: dict[str, str] = {}
+
+        for q in plan.questions:
+            # Check if this question's answer is shared from a prior feature
+            shared_key = f"{plan.feature_type}:{q.id_suffix}"
+            if shared_key in shared_answers and q.id_suffix not in (
+                "behavior_description", "db_table", "db_fields", "db_operation",
+                "ai_system_prompt", "ai_input_field", "file_operation_type",
+                "auth_detail", "ws_purpose",
+            ):
+                feature_answers[q.id_suffix] = shared_answers[shared_key]
+                continue
+
+            qid = f"reconstruct-{plan.feature_id}-{q.id_suffix}-{uuid.uuid4().hex[:6]}"
+            answer = await question_callback(
+                qid,
+                q.render_text(plan.feature_name),
+                q.question_type,
+                None,
+                q.choices if q.choices else None,
+                feature_context,
+            )
+
+            if answer:
+                ans_str = answer if isinstance(answer, str) else str(answer)
+                feature_answers[q.id_suffix] = ans_str
+                # Share category-level answers (e.g. db_type applies to all db features)
+                if q.id_suffix in ("db_type", "ai_provider", "auth_provider", "storage_provider"):
+                    shared_answers[shared_key] = ans_str
+
+        answers_by_feature[plan.feature_id] = feature_answers
+
+    # ------------------------------------------------------------------ #
+    # Collect secrets in a single batch at the end
+    # ------------------------------------------------------------------ #
+    secret_fields = get_secret_fields(plans, answers_by_feature)
+    user_secrets: dict[str, str] = {}
+    if secret_fields:
+        secret_qid = f"secrets-{uuid.uuid4().hex[:8]}"
+        secret_answer = await question_callback(
+            secret_qid,
+            "Almost done! I need the following secrets to generate working code. "
+            "These are written only to the local .env file — never stored or logged.",
+            "env_vars",
+            secret_fields,
+            None,
+            None,
+        )
+        if secret_answer and isinstance(secret_answer, dict):
+            user_secrets = secret_answer
+
+    # ------------------------------------------------------------------ #
+    # 2d: Reconstruct implementations
+    # ------------------------------------------------------------------ #
+    reconstruction_results: dict[str, dict] = {}
+    for plan in plans:
+        answers = answers_by_feature.get(plan.feature_id, {})
+        # Find the feature object
+        feature_obj = next(
+            (f for p in site_map.pages for f in p.features if f.feature_id == plan.feature_id),
+            None,
+        )
+        if feature_obj is None:
+            continue
+        result = reconstruct(feature_obj, answers, user_secrets)
+        reconstruction_results[plan.feature_id] = result
+
+    # ------------------------------------------------------------------ #
+    # 2e: Build final feature_spec — merge endpoint + reconstructed features
+    # ------------------------------------------------------------------ #
+    # Use existing analyze() for endpoint-backed features
+    endpoint_spec = analyze(trace_path, None)
+
+    # Build lookup: feature_id → spec entry from endpoint analysis
+    endpoint_features = {f["id"]: f for f in endpoint_spec.get("features", [])}
+
+    final_features: list[dict] = []
+    seen_ids: set[str] = set()
+
+    # Add reconstructed features first (they're the new ones)
+    for plan in plans:
+        if plan.feature_id in seen_ids:
+            continue
+        seen_ids.add(plan.feature_id)
+        feature_obj = next(
+            (f for p in site_map.pages for f in p.features if f.feature_id == plan.feature_id),
+            None,
+        )
+        recon = reconstruction_results.get(plan.feature_id, {})
+        entry: dict = {
+            "id": plan.feature_id,
+            "name": plan.feature_name,
+            "description": feature_obj.description if feature_obj else plan.feature_name,
+            "implementation_type": recon.get("implementation_type", "reconstructed"),
+            "feature_type": plan.feature_type,
+            "source": "reconstructed",
+            "returns": "Result of the operation.",
+            "endpoint": None,
+            "code_snippet": recon.get("code_snippet"),
+            "code_imports": recon.get("code_imports", []),
+            "env_vars_needed": recon.get("env_vars_needed", []),
+            "reconstruction_answers": recon.get("reconstruction_answers", {}),
+        }
+        final_features.append(entry)
+
+    # Add endpoint features
+    for f in endpoint_spec.get("features", []):
+        if f["id"] in seen_ids:
+            continue
+        seen_ids.add(f["id"])
+        f["source"] = "browser"
+        f["feature_type"] = "api_endpoint"
+        final_features.append(f)
+
+    # Collect all env_vars across reconstructed features
+    all_env_vars: list[dict] = []
+    seen_env: set[str] = set()
+    for f in final_features:
+        for ev in f.get("env_vars_needed", []):
+            if ev["name"] not in seen_env:
+                seen_env.add(ev["name"])
+                all_env_vars.append(ev)
+
+    spec = {
+        "product_name": endpoint_spec.get("product_name", site_map.product_name),
+        "base_url": endpoint_spec.get("base_url", site_map.target_url),
+        "auth": endpoint_spec.get("auth", {"type": "none", "notes": ""}),
+        "features": final_features,
+        "env_vars": all_env_vars,
+        "site_map_summary": {
+            "pages": len(site_map.pages),
+            "total_features": site_map.total_features,
+            "features_with_endpoints": site_map.features_with_endpoints,
+            "features_reconstructed": len(reconstruction_results),
+        },
+    }
+
+    # Merge user secrets into user_env file so generate() picks them up
+    if user_secrets:
+        user_env_path = out_dir / "user_env.json"
+        existing: dict = {}
+        if user_env_path.exists():
+            try:
+                existing = json.loads(user_env_path.read_text())
+            except Exception:
+                pass
+        existing.update(user_secrets)
+        user_env_path.write_text(json.dumps(existing, indent=2))
+
+    (out_dir / "feature_spec.json").write_text(json.dumps(spec, indent=2))
+    return spec
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()

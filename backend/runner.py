@@ -30,7 +30,6 @@ async def run_job(
     manager,
     github_token: str | None = None,
 ) -> None:
-    from analyzer.analyze import analyze
     from explorer.agent import explore
     from generator.generate import generate
 
@@ -45,8 +44,14 @@ async def run_job(
     # ------------------------------------------------------------------
     # Shared question helper — emits chat_question SSE, waits for answer
     # ------------------------------------------------------------------
-    async def _ask(question_id: str, text: str, question_type: str,
-                   fields: list | None = None, choices: list | None = None):
+    async def _ask(
+        question_id: str,
+        text: str,
+        question_type: str,
+        fields: list | None = None,
+        choices: list | None = None,
+        feature_context: dict | None = None,
+    ):
         manager.emit(job_id, {
             "type": "chat_question",
             "question_id": question_id,
@@ -54,6 +59,7 @@ async def run_job(
             "question_type": question_type,
             "fields": fields or [],
             "choices": choices or [],
+            "feature_context": feature_context,
         })
         manager.update(job_id, current_action=f"Waiting: {text[:60]}…")
         event = manager.request_question(job_id, question_id)
@@ -282,25 +288,88 @@ async def run_job(
                     break  # no detail given — proceed anyway
 
         # ------------------------------------------------------------------ #
-        # Stage 2 — Analyze
+        # Stage 2 — Site mapping, classification, Q&A, reconstruction, analyze
         # ------------------------------------------------------------------ #
-        manager.update(job_id, status=Status.ANALYZING, current_action="Analyzing captured API calls…")
-        manager.emit(job_id, {"type": "stage_change", "stage": Status.ANALYZING})
+        from analyzer.analyze import analyze_v2
 
+        # Stage 2a: Site mapping
+        manager.update(job_id, status=Status.SITE_MAPPING,
+                       current_action="Building website feature map from trace…")
+        manager.emit(job_id, {"type": "stage_change", "stage": Status.SITE_MAPPING})
+
+        # Stage 2b+: Classification, questioning, reconstruction all happen inside analyze_v2.
+        # The question_callback mirrors _ask exactly — analyze_v2 drives the Q&A loop.
+        async def _analysis_question_callback(
+            question_id, text, question_type, fields=None, choices=None, feature_context=None
+        ):
+            # Emit classifying → questioning stage transitions as needed
+            current = manager._jobs.get(job_id)
+            if current and current.status == Status.SITE_MAPPING:
+                manager.update(job_id, status=Status.CLASSIFYING,
+                               current_action="Classifying feature implementation types…")
+                manager.emit(job_id, {"type": "stage_change", "stage": Status.CLASSIFYING})
+
+            if current and current.status in (Status.CLASSIFYING, Status.SITE_MAPPING):
+                manager.update(job_id, status=Status.QUESTIONING,
+                               current_action="Asking about feature implementations…")
+                manager.emit(job_id, {"type": "stage_change", "stage": Status.QUESTIONING})
+
+            if feature_context:
+                manager.emit(job_id, {
+                    "type": "reconstruction_progress",
+                    "feature_id": feature_context.get("feature_id", ""),
+                    "feature_name": feature_context.get("feature_name", ""),
+                    "status": "questioning",
+                    "implementation_type": feature_context.get("feature_type", "unknown"),
+                })
+
+            return await _ask(question_id, text, question_type, fields, choices, feature_context)
+
+        spec = await analyze_v2(
+            trace_path=trace_dir / "trace.json",
+            out_dir=job_dir,
+            question_callback=_analysis_question_callback,
+            code_routes=code_routes if code_routes else None,
+            vector_store=vector_store,
+        )
+
+        # Emit reconstruction stage and progress events
+        manager.update(job_id, status=Status.RECONSTRUCTING,
+                       current_action="Generating implementations…")
+        manager.emit(job_id, {"type": "stage_change", "stage": Status.RECONSTRUCTING})
+
+        for f in spec.get("features", []):
+            if f.get("source") == "reconstructed":
+                manager.emit(job_id, {
+                    "type": "reconstruction_progress",
+                    "feature_id": f["id"],
+                    "feature_name": f["name"],
+                    "status": "done",
+                    "implementation_type": f.get("feature_type", "unknown"),
+                })
+
+        # Emit site map summary
+        site_map_summary = spec.get("site_map_summary", {})
+        if site_map_summary:
+            manager.emit(job_id, {
+                "type": "site_map_built",
+                "pages": site_map_summary.get("pages", 0),
+                "features": site_map_summary.get("total_features", 0),
+                "features_with_endpoints": site_map_summary.get("features_with_endpoints", 0),
+                "features_needing_reconstruction": site_map_summary.get("features_reconstructed", 0),
+            })
+
+        # Fall back to regular analyze for code-aware merge if needed
         loop = asyncio.get_running_loop()
-
         if code_routes and vector_store:
-            # Code-aware analysis: merge browser trace with static code analysis
-            manager.update(job_id, current_action="Merging browser trace with code analysis…")
+            manager.update(job_id, status=Status.ANALYZING,
+                           current_action="Merging browser trace with code analysis…")
+            manager.emit(job_id, {"type": "stage_change", "stage": Status.ANALYZING})
             from code_analyzer.merge import merge_analysis
-
-            browser_spec = await loop.run_in_executor(
-                None, analyze, trace_dir / "trace.json", None
-            )
             spec = await loop.run_in_executor(
                 None,
                 lambda: merge_analysis(
-                    browser_spec=browser_spec,
+                    browser_spec=spec,
                     code_routes=code_routes,
                     vector_store=vector_store,
                     target_url=url,
@@ -309,10 +378,9 @@ async def run_job(
             )
             (job_dir / "feature_spec.json").write_text(json.dumps(spec, indent=2))
         else:
-            # Browser-only analysis (original path)
-            spec = await loop.run_in_executor(
-                None, analyze, trace_dir / "trace.json", job_dir / "feature_spec.json"
-            )
+            manager.update(job_id, status=Status.ANALYZING,
+                           current_action="Finalizing feature spec…")
+            manager.emit(job_id, {"type": "stage_change", "stage": Status.ANALYZING})
 
         features_found = len(spec.get("features", []))
         manager.update(job_id, features_found=features_found)

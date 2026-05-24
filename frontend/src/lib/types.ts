@@ -3,10 +3,15 @@ export type JobStatus =
   | "waiting_for_agent"
   | "code_analysis"
   | "exploring"
+  | "site_mapping"
+  | "classifying"
+  | "questioning"
+  | "reconstructing"
   | "analyzing"
   | "generating"
   | "done"
-  | "failed";
+  | "failed"
+  | "stopped";
 
 export interface JobState {
   id: string;
@@ -65,6 +70,38 @@ export interface FeatureSpec {
 export interface AuthField {
   name: string;   // field key, e.g. "username", "password"
   label: string;  // display label detected from the page
+  description?: string;
+}
+
+export interface FeatureContext {
+  feature_id: string;
+  feature_name: string;
+  feature_type: string;
+}
+
+export interface SiteFeature {
+  feature_id: string;
+  name: string;
+  description: string;
+  feature_type: string;
+  has_endpoint: boolean;
+  ui_trigger: string;
+  triggering_element: string | null;
+  status: "pending" | "has_endpoint" | "questioning" | "reconstructed" | "failed";
+}
+
+export interface SitePage {
+  url: string;
+  title: string;
+  description: string;
+  features: SiteFeature[];
+}
+
+export interface SiteMapData {
+  pages: SitePage[];
+  total_features: number;
+  features_with_endpoints: number;
+  features_needing_reconstruction: number;
 }
 
 export interface ChatMessage {
@@ -78,6 +115,7 @@ export interface ChatMessage {
   choices?: string[];
   answered?: boolean;
   timed_out?: boolean;
+  feature_context?: FeatureContext;
 }
 
 // SSE event union
@@ -90,7 +128,7 @@ export type SSEEvent =
   | { type: "auth_required"; fields: AuthField[] }
   | { type: "auth_accepted" }
   | { type: "auth_timeout" }
-  | { type: "chat_question"; question_id: string; text: string; question_type: "text" | "credentials" | "choice" | "file_upload" | "env_vars"; fields?: AuthField[]; choices?: string[] }
+  | { type: "chat_question"; question_id: string; text: string; question_type: "text" | "credentials" | "choice" | "file_upload" | "env_vars"; fields?: AuthField[]; choices?: string[]; feature_context?: FeatureContext }
   | { type: "chat_answer_received"; question_id: string }
   | { type: "chat_timeout"; question_id: string }
   | { type: "user_message"; text: string }
@@ -98,4 +136,8 @@ export type SSEEvent =
   | { type: "code_analysis_warning"; message: string }
   | { type: "error"; message: string }
   | { type: "heartbeat" }
-  | { type: "queue_position"; position: number; queue_length: number };
+  | { type: "queue_position"; position: number; queue_length: number }
+  | { type: "site_map_built"; pages: number; features: number; features_with_endpoints: number; features_needing_reconstruction: number }
+  | { type: "classification_done"; breakdown: Record<string, number> }
+  | { type: "reconstruction_progress"; feature_id: string; feature_name: string; status: "questioning" | "generating" | "done" | "failed"; implementation_type: string }
+  | { type: "stopped" };
