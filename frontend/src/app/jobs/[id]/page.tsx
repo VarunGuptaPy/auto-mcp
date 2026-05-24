@@ -30,6 +30,7 @@ interface PageState {
   endpointsByHost: Record<string, Endpoint[]>;
   error: string | null;
   queuePosition: number;
+  queueLength: number;
   codeRoutes: number;
   codeWarning: string | null;
 }
@@ -43,7 +44,8 @@ type Action =
   | { type: "FEATURES"; count: number }
   | { type: "CODE_DONE"; routes: number }
   | { type: "CODE_WARN"; message: string }
-  | { type: "ERROR"; message: string };
+  | { type: "ERROR"; message: string }
+  | { type: "QUEUE_POS"; position: number; queueLength: number };
 
 function byHost(endpoints: Endpoint[]): Record<string, Endpoint[]> {
   return endpoints.reduce<Record<string, Endpoint[]>>((acc, ep) => {
@@ -63,6 +65,7 @@ function reducer(state: PageState, action: Action): PageState {
         total: action.job.total_steps,
         features: action.job.features_found,
         queuePosition: action.job.queue_position,
+        queueLength: action.job.queue_position + 1,
         error: action.job.error,
       };
     case "STAGE":
@@ -94,6 +97,8 @@ function reducer(state: PageState, action: Action): PageState {
       return { ...state, codeWarning: action.message };
     case "ERROR":
       return { ...state, status: "failed", error: action.message };
+    case "QUEUE_POS":
+      return { ...state, queuePosition: action.position, queueLength: action.queueLength };
     default:
       return state;
   }
@@ -111,6 +116,7 @@ const INIT: PageState = {
   endpointsByHost: {},
   error: null,
   queuePosition: 0,
+  queueLength: 0,
   codeRoutes: 0,
   codeWarning: null,
 };
@@ -308,6 +314,9 @@ export default function JobPage() {
             );
           }
           break;
+        case "queue_position":
+          dispatch({ type: "QUEUE_POS", position: ev.position, queueLength: ev.queue_length });
+          break;
       }
     },
     [id, router, user],
@@ -352,6 +361,7 @@ export default function JobPage() {
     endpointsByHost,
     error,
     queuePosition,
+    queueLength,
     codeRoutes,
     codeWarning,
   } = state;
@@ -394,6 +404,7 @@ export default function JobPage() {
             features={features}
             hasCodeAnalysis={hasCodeAnalysis}
             codeRoutes={codeRoutes}
+            queuePosition={queuePosition}
           />
           {codeWarning && (
             <div className="mt-3 bg-yellow-950/30 border border-yellow-800/40 rounded-lg p-2.5 text-[11px] text-yellow-400/80 leading-relaxed">
@@ -411,11 +422,28 @@ export default function JobPage() {
             <span className="text-xs text-text2">elapsed</span>
           </div>
 
-          {status === "queued" && queuePosition > 0 && (
-            <div className="mt-4 bg-blue-950/40 border border-blue-800/50 rounded-lg p-3 text-xs text-blue-300">
-              <strong>Queue position:</strong> {queuePosition}
-              <br />
-              Waiting for a browser slot…
+          {status === "queued" && (
+            <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-accent uppercase tracking-wider">Queue</span>
+                <span className="text-xs text-text2">
+                  {queuePosition === 0 ? "Next up" : `#${queuePosition + 1} of ${queueLength}`}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-500"
+                  style={{ width: queueLength > 1 ? `${((queueLength - queuePosition) / queueLength) * 100}%` : "100%" }}
+                />
+              </div>
+
+              <p className="text-[11px] text-text2 leading-relaxed">
+                {queuePosition === 0
+                  ? "You're next — a browser slot will open shortly."
+                  : `${queuePosition} job${queuePosition > 1 ? "s" : ""} ahead of you. Hang tight…`}
+              </p>
             </div>
           )}
         </aside>
@@ -459,6 +487,46 @@ export default function JobPage() {
                     Download local_agent.py
                   </a>
                 </div>
+              </div>
+            ) : status === "queued" ? (
+              <div className="flex flex-col items-center justify-center w-full h-full gap-6 px-10">
+                {/* Position badge */}
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+                    Queue position
+                  </span>
+                  <span className="text-7xl font-black text-text1 tabular-nums leading-none">
+                    {queuePosition === 0 ? "–" : queuePosition + 1}
+                  </span>
+                  {queueLength > 1 && (
+                    <span className="text-sm text-muted">
+                      of {queueLength} job{queueLength > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full max-w-xs">
+                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
+                      style={{
+                        width: queueLength > 1
+                          ? `${((queueLength - queuePosition) / queueLength) * 100}%`
+                          : "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Status message */}
+                <p className="text-sm text-text2 text-center max-w-xs leading-relaxed">
+                  {queuePosition === 0
+                    ? "You're next — a browser slot will open any moment now."
+                    : `${queuePosition} job${queuePosition > 1 ? "s" : ""} ahead of you. Your browser session will start automatically.`}
+                </p>
+
+                <span className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted text-sm">

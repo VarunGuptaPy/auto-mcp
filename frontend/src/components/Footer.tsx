@@ -11,7 +11,6 @@ const NAV = {
   resources: [
     { href: "https://modelcontextprotocol.io", label: "MCP Docs",  ext: true },
     { href: "https://www.anthropic.com",        label: "Anthropic", ext: true },
-    { href: "https://github.com/VarunGuptaPy/auto-mcp", label: "GitHub", ext: true },
   ],
   legal: [
     { href: "/privacy", label: "Privacy Policy" },
@@ -49,21 +48,7 @@ function ColHead({ children }: { children: React.ReactNode }) {
 
 /* ─── Social icons ─────────────────────────────────────────────────── */
 function FooterLogoMark() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="footer-amcp-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#0891b2" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#footer-amcp-grad)" />
-      <path d="M13 11.5a4 4 0 0 0-4 4v1a4 4 0 0 0 4 4h1.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      <path d="M19 20.5a4 4 0 0 0 4-4v-1a4 4 0 0 0-4-4h-1.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      <path d="M13.5 16h5" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="16" cy="16" r="1.2" fill="white" />
-    </svg>
-  );
+  return <img src="/logo.png" alt="" width={28} height={28} className="rounded-sm" />;
 }
 
 function GHIcon() {
@@ -120,10 +105,10 @@ export default function Footer() {
           {/* Brand column — spans full width on mobile */}
           <div className="col-span-2 md:col-span-1 flex flex-col gap-5">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2.5 w-fit group" aria-label="auto-mcp home">
+            <Link href="/" className="flex items-center gap-2.5 w-fit group" aria-label="Gichku home">
               <FooterLogoMark />
               <span className="font-semibold text-[15px] tracking-tight text-text1 group-hover:opacity-80 transition-opacity">
-                auto<span className="text-accent">-mcp</span>
+                Gichku
               </span>
             </Link>
 
@@ -134,9 +119,6 @@ export default function Footer() {
 
             {/* Social icons */}
             <div className="flex items-center gap-2 mt-1">
-              <SocialLink href="https://github.com/VarunGuptaPy/auto-mcp" label="GitHub">
-                <GHIcon />
-              </SocialLink>
               <SocialLink href="https://x.com" label="X / Twitter">
                 <XIcon />
               </SocialLink>
@@ -196,7 +178,7 @@ export default function Footer() {
         <div className="border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 text-center sm:text-left">
             <p className="text-xs text-muted">
-              &copy; {year} auto-mcp. All rights reserved.
+              &copy; {year} Gichku. All rights reserved.
             </p>
             <span className="hidden sm:inline text-border-sub text-xs" aria-hidden="true">·</span>
             <p className="text-xs text-muted/70">
@@ -206,9 +188,6 @@ export default function Footer() {
 
           {/* Social icons repeated in bottom bar */}
           <div className="flex items-center gap-2">
-            <SocialLink href="https://github.com/VarunGuptaPy/auto-mcp" label="GitHub">
-              <GHIcon />
-            </SocialLink>
             <SocialLink href="https://x.com" label="X / Twitter">
               <XIcon />
             </SocialLink>

@@ -5,23 +5,39 @@ services:
       dockerfile: Dockerfile
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-2}
       - JOB_TIMEOUT_SECONDS=${JOB_TIMEOUT_SECONDS:-600}
+      - JOB_RATE_LIMIT=${JOB_RATE_LIMIT:-20/minute}
       - RUNS_DIR=/app/runs
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
+      - DODO_API_KEY=${DODO_API_KEY}
+      - DODO_PRODUCT_ID_PRO=${DODO_PRODUCT_ID_PRO}
+      - DODO_WEBHOOK_SECRET=${DODO_WEBHOOK_SECRET}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
     volumes:
       - runs_data:/app/runs
     restart: unless-stopped
     shm_size: "2gb"
-    # api is internal — only the web service talks to it directly
 
   web:
     build:
       context: frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
+        - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
+        - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
+        - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}
+        - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
+        - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     ports:
       - "3000:3000"
     environment:
-      # Internal Docker network hostname for the api service
       - API_URL=http://api:8000
     depends_on:
       - api

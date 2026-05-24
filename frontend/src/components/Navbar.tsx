@@ -49,7 +49,6 @@ export default function Navbar() {
   const links = [
     { href: "/#how-it-works", label: "How it works" },
     { href: "/pricing",        label: "Pricing" },
-    { href: "https://github.com/VarunGuptaPy/auto-mcp", label: "GitHub", ext: true },
   ];
 
   async function handleSignOut() {
@@ -66,7 +65,7 @@ export default function Navbar() {
         <Link href="/" className="shrink-0 flex items-center gap-2.5 group">
           <LogoMark />
           <span className="font-semibold text-[15px] tracking-tight text-text1 group-hover:opacity-80 transition-opacity">
-            auto<span className="text-accent">-mcp</span>
+            Gichku
           </span>
         </Link>
 
@@ -241,48 +240,8 @@ export default function Navbar() {
 
 /* ─── Logo mark ───────────────────────────────────────────────── */
 function LogoMark() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
-      <defs>
-        <linearGradient id="amcp-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#0891b2" />
-        </linearGradient>
-      </defs>
-
-      {/* Background rounded square */}
-      <rect width="32" height="32" rx="9" fill="url(#amcp-grad)" />
-
-      {/* Left arc of chain link — represents "website" */}
-      <path
-        d="M13 11.5a4 4 0 0 0-4 4v1a4 4 0 0 0 4 4h1.5"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-
-      {/* Right arc of chain link — represents "MCP server" */}
-      <path
-        d="M19 20.5a4 4 0 0 0 4-4v-1a4 4 0 0 0-4-4h-1.5"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-
-      {/* Center bar connecting the two — represents auto-mcp bridge */}
-      <path
-        d="M13.5 16h5"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-
-      {/* Small dot at center — the "connection point" */}
-      <circle cx="16" cy="16" r="1.2" fill="white" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo.png" alt="" width={32} height={32} className="rounded-sm" />;
 }
 
 /* ─── Icons ───────────────────────────────────────────────────── */

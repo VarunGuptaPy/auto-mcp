@@ -84,6 +84,9 @@ class JobManager:
         self._user_messages: dict[str, list[str]] = {}
         self._runner: Callable[..., Coroutine] | None = None
         self._max_concurrent = max_concurrent
+        self._active_count: int = 0
+        # Ordered list of job IDs waiting for a slot (front = next to run)
+        self._pending_order: list[str] = []
         # Local agent support — all in-memory only
         self._agent_tokens: dict[str, str] = {}           # job_id → token
         self._agent_snapshots: dict[str, asyncio.Queue] = {}   # job_id → snapshot queue
@@ -100,12 +103,28 @@ class JobManager:
         self._runner = fn
 
     async def start_worker(self) -> None:
+        """
+        Pull jobs FIFO from the queue. Acquire the semaphore *before* launching
+        so we never create more concurrent tasks than MAX_CONCURRENT_JOBS, and
+        so queue positions remain accurate while jobs wait.
+        """
         while True:
             job_id = await self._queue.get()
-            asyncio.create_task(self._dispatch(job_id))
+            # Block here until a slot is free — keeps the loop from pulling
+            # the next job until there's actually room to run it.
+            await self._semaphore.acquire()
+            # Slot acquired: remove from pending list, broadcast updated positions.
+            try:
+                self._pending_order.remove(job_id)
+            except ValueError:
+                pass
+            self._active_count += 1
+            self._broadcast_queue_positions()
+            asyncio.create_task(self._run_job(job_id))
 
-    async def _dispatch(self, job_id: str) -> None:
-        async with self._semaphore:
+    async def _run_job(self, job_id: str) -> None:
+        """Run one job and release the semaphore when done."""
+        try:
             job = self._jobs.get(job_id)
             if job is None or self._runner is None:
                 return
@@ -120,6 +139,20 @@ class JobManager:
                 self.emit(job_id, {"type": "error", "message": "Job timed out."})
             except Exception as exc:
                 _log.error("Job %s failed: %s", job_id, exc)
+        finally:
+            self._active_count -= 1
+            self._semaphore.release()
+
+    def _broadcast_queue_positions(self) -> None:
+        """Emit a queue_position SSE event to every waiting job with its new position."""
+        total = len(self._pending_order)
+        for i, jid in enumerate(self._pending_order):
+            self.update(jid, queue_position=i)
+            self.emit(jid, {
+                "type": "queue_position",
+                "position": i,
+                "queue_length": total,
+            })
 
     # ------------------------------------------------------------------
     # Unified question / answer (pause agent, wait for user input)
@@ -194,7 +227,7 @@ class JobManager:
             github_repos=repos,
             local_agent=local_agent,
         )
-        state.queue_position = self._queue.qsize()
+        state.queue_position = len(self._pending_order)
         self._jobs[job_id] = state
 
         if email and password:
@@ -214,7 +247,14 @@ class JobManager:
 
         job_dir = self._runs_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
+        self._pending_order.append(job_id)
         self._persist(job_id)
+        # Emit initial position so the frontend knows where it stands immediately.
+        self.emit(job_id, {
+            "type": "queue_position",
+            "position": state.queue_position,
+            "queue_length": len(self._pending_order),
+        })
         self._queue.put_nowait(job_id)
         return job_id
 
@@ -368,7 +408,7 @@ class JobManager:
         return list(self._replay.get(job_id, []))
 
     def queue_size(self) -> int:
-        return self._queue.qsize()
+        return len(self._pending_order)
 
     def active_count(self) -> int:
-        return self._max_concurrent - self._semaphore._value  # type: ignore[attr-defined]
+        return self._active_count

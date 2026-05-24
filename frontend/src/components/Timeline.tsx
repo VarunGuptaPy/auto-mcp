@@ -7,9 +7,10 @@ interface TimelineProps {
   features: number;
   hasCodeAnalysis?: boolean;
   codeRoutes?: number;
+  queuePosition?: number;
 }
 
-// Stages shown depend on whether a GitHub repo was supplied
+// Stages shown depend on whether code analysis was requested
 function buildStages(hasCodeAnalysis: boolean): { key: JobStatus; label: string }[] {
   const base: { key: JobStatus; label: string }[] = [
     { key: "queued",        label: "Queued" },
@@ -35,10 +36,13 @@ function stageSub(
   total: number,
   features: number,
   codeRoutes: number,
+  queuePosition: number,
 ): string {
   if (status === "failed" && key === "done") return "Failed";
   switch (key) {
-    case "queued":        return "Waiting for a browser slot…";
+    case "queued":        return queuePosition > 0
+                            ? `Position ${queuePosition + 1} in queue`
+                            : "Waiting for a browser slot…";
     case "code_analysis": return status === "code_analysis"
                             ? "Fetching & indexing repository…"
                             : codeRoutes > 0 ? `${codeRoutes} routes indexed` : "Complete";
@@ -57,6 +61,7 @@ export default function Timeline({
   features,
   hasCodeAnalysis = false,
   codeRoutes = 0,
+  queuePosition = 0,
 }: TimelineProps) {
   const STAGES = buildStages(hasCodeAnalysis);
   const cur = STAGE_ORDER[status] ?? 0;
@@ -68,7 +73,7 @@ export default function Timeline({
         const isDone    = !failed && i < cur;
         const isActive  = !failed && i === cur;
         const isFailed  = failed && s.key === "done";
-        const sub       = stageSub(s.key, status, step, total, features, codeRoutes);
+        const sub       = stageSub(s.key, status, step, total, features, codeRoutes, queuePosition);
 
         return (
           <li key={s.key} className="relative flex items-start gap-3 py-2">

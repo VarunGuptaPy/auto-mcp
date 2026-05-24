@@ -97,4 +97,5 @@ export type SSEEvent =
   | { type: "code_analysis_done"; routes_found: number; env_vars_found: number; vector_backend: string }
   | { type: "code_analysis_warning"; message: string }
   | { type: "error"; message: string }
-  | { type: "heartbeat" };
+  | { type: "heartbeat" }
+  | { type: "queue_position"; position: number; queue_length: number };

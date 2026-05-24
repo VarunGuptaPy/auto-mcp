@@ -28,7 +28,7 @@ export const getFirebaseAuth = () => _getAuth(getApp());
 export const getFirebaseDb   = () => _getFirestore(getApp());
 
 export const googleProvider = new GoogleAuthProvider();
-export const githubProvider = new GithubAuthProvider();
-
 googleProvider.setCustomParameters({ prompt: "select_account" });
+
+export const githubProvider = new GithubAuthProvider();
 githubProvider.addScope("repo");

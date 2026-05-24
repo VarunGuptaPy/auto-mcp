@@ -16,11 +16,11 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "auto-mcp — Turn any website into an AI tool",
+  title: "Gichku — Turn any website into an AI tool",
   description:
-    "Paste a URL. auto-mcp's AI agent maps every route, discovers every feature, and generates a production-ready MCP server in minutes.",
+    "Paste a URL. Gichku's AI agent maps every route, discovers every feature, and generates a production-ready MCP server in minutes.",
   openGraph: {
-    title: "auto-mcp",
+    title: "Gichku",
     description: "Turn any website into an AI tool",
     type: "website",
   },

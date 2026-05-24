@@ -12,13 +12,12 @@ const PLANS = [
     name:      "Free",
     price:     "$0",
     period:    "",
-    tagline:   "For exploring auto-mcp",
+    tagline:   "For exploring Gichku",
     features: [
       { text: `${FREE_JOB_LIMIT} MCP servers / month`, included: true },
       { text: "Up to 50 steps per job",                included: true },
       { text: "Browser agent exploration",             included: true },
       { text: "Download MCP server",                   included: true },
-      { text: "GitHub code analysis",                  included: false },
       { text: "Priority job queue",                    included: false },
       { text: "Unlimited steps",                       included: false },
     ],
@@ -28,7 +27,7 @@ const PLANS = [
   {
     id:      "pro",
     name:    "Pro",
-    price:   "$9.99",
+    price:   "$4.99",
     period:  "/month",
     tagline: "For developers who ship",
     badge:   "Most popular",
@@ -37,7 +36,6 @@ const PLANS = [
       { text: "Unlimited steps per job",               included: true },
       { text: "Browser agent exploration",             included: true },
       { text: "Download MCP server",                   included: true },
-      { text: "GitHub code analysis",                  included: true },
       { text: "Priority job queue",                    included: true },
       { text: "Email support",                         included: true },
     ],
@@ -203,7 +201,7 @@ export default function PricingPage() {
             Questions about enterprise or custom plans?
           </p>
           <a
-            href="mailto:hello@auto-mcp.dev"
+            href="mailto:hello@gichku.com"
             className="text-accent hover:text-accent-h font-medium text-sm"
           >
             Contact us →
@@ -218,11 +216,7 @@ export default function PricingPage() {
 const FAQ = [
   {
     q: "What counts as one MCP server?",
-    a: "Each job submission counts as one. A job is a single URL you submit to auto-mcp, which produces one MCP server zip file.",
-  },
-  {
-    q: "Can I use my own GitHub token instead of OAuth?",
-    a: "Yes — Pro users can use a Personal Access Token as an alternative to GitHub OAuth. The token is never written to disk.",
+    a: "Each job submission counts as one. A job is a single URL you submit to Gichku, which produces one MCP server zip file.",
   },
   {
     q: "What happens if I hit the free limit?",
@@ -230,7 +224,7 @@ const FAQ = [
   },
   {
     q: "Is my source code sent to third parties?",
-    a: "No. GitHub repository analysis happens entirely on the server running auto-mcp. Code chunks are stored locally in ChromaDB on your machine.",
+    a: "No. Code analysis happens entirely on the server. Code chunks are stored locally in ChromaDB on your machine.",
   },
   {
     q: "What payment methods do you accept?",

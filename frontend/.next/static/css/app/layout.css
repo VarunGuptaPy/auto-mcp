@@ -842,9 +842,6 @@ html.dark .btn-primary {
 .ml-1 {
   margin-left: 0.25rem;
 }
-.ml-1\.5 {
-  margin-left: 0.375rem;
-}
 .ml-2 {
   margin-left: 0.5rem;
 }
@@ -1313,6 +1310,11 @@ html.dark .btn-primary {
   margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
+.space-y-1\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+}
 .space-y-2 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0;
   margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
@@ -1337,9 +1339,6 @@ html.dark .btn-primary {
   --tw-space-y-reverse: 0;
   margin-top: calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(1.25rem * var(--tw-space-y-reverse));
-}
-.self-start {
-  align-self: flex-start;
 }
 .self-stretch {
   align-self: stretch;
@@ -1387,6 +1386,9 @@ html.dark .btn-primary {
 }
 .rounded-md {
   border-radius: 0.375rem;
+}
+.rounded-sm {
+  border-radius: 0.125rem;
 }
 .rounded-xl {
   border-radius: 0.75rem;
@@ -1437,9 +1439,6 @@ html.dark .btn-primary {
 }
 .border-accent\/50 {
   border-color: rgb(var(--accent-rgb) / 0.5);
-}
-.border-blue-800\/50 {
-  border-color: rgb(30 64 175 / 0.5);
 }
 .border-border {
   border-color: var(--border);
@@ -1581,9 +1580,6 @@ html.dark .btn-primary {
 .bg-black\/70 {
   background-color: rgb(0 0 0 / 0.7);
 }
-.bg-blue-950\/40 {
-  background-color: rgb(23 37 84 / 0.4);
-}
 .bg-border {
   background-color: var(--border);
 }
@@ -1662,6 +1658,9 @@ html.dark .btn-primary {
 .bg-warn\/60 {
   background-color: rgb(234 179 8 / 0.6);
 }
+.bg-white\/5 {
+  background-color: rgb(255 255 255 / 0.05);
+}
 .bg-yellow-950\/30 {
   background-color: rgb(66 32 6 / 0.3);
 }
@@ -1669,8 +1668,8 @@ html.dark .btn-primary {
   --tw-bg-opacity: 1;
   background-color: rgb(24 24 27 / var(--tw-bg-opacity, 1));
 }
-.bg-white\/5 {
-  background-color: rgb(255 255 255 / 0.05);
+.bg-white\/10 {
+  background-color: rgb(255 255 255 / 0.1);
 }
 .bg-gradient-to-r {
   background-image: linear-gradient(to right, var(--tw-gradient-stops));
@@ -1835,9 +1834,6 @@ html.dark .btn-primary {
 .pb-12 {
   padding-bottom: 3rem;
 }
-.pb-2 {
-  padding-bottom: 0.5rem;
-}
 .pb-3 {
   padding-bottom: 0.75rem;
 }
@@ -1949,6 +1945,10 @@ html.dark .btn-primary {
   font-size: 0.75rem;
   line-height: 1rem;
 }
+.text-7xl {
+  font-size: 4.5rem;
+  line-height: 1;
+}
 .font-black {
   font-weight: 900;
 }
@@ -1961,9 +1961,6 @@ html.dark .btn-primary {
 .font-medium {
   font-weight: 500;
 }
-.font-normal {
-  font-weight: 400;
-}
 .font-semibold {
   font-weight: 600;
 }
@@ -1972,6 +1969,10 @@ html.dark .btn-primary {
 }
 .italic {
   font-style: italic;
+}
+.tabular-nums {
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
 .leading-\[1\.06\] {
   line-height: 1.06;
@@ -2019,10 +2020,6 @@ html.dark .btn-primary {
 .text-blue-200 {
   --tw-text-opacity: 1;
   color: rgb(191 219 254 / var(--tw-text-opacity, 1));
-}
-.text-blue-300 {
-  --tw-text-opacity: 1;
-  color: rgb(147 197 253 / var(--tw-text-opacity, 1));
 }
 .text-border {
   color: var(--border);
@@ -2200,6 +2197,9 @@ html.dark .btn-primary {
 }
 .duration-700 {
   transition-duration: 700ms;
+}
+.ease-out {
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
 .will-change-transform {
   will-change: transform;
@@ -2430,11 +2430,11 @@ html.dark {
 .hover\:bg-surface-2:hover {
   background-color: var(--surface-2);
 }
-.hover\:bg-white\/\[0\.02\]:hover {
-  background-color: rgb(255 255 255 / 0.02);
-}
 .hover\:bg-white\/10:hover {
   background-color: rgb(255 255 255 / 0.1);
+}
+.hover\:bg-white\/\[0\.02\]:hover {
+  background-color: rgb(255 255 255 / 0.02);
 }
 .hover\:text-accent-h:hover {
   --tw-text-opacity: 1;
@@ -2630,10 +2630,6 @@ html.dark {
 
   .lg\:items-start {
     align-items: flex-start;
-  }
-
-  .lg\:justify-start {
-    justify-content: flex-start;
   }
 
   .lg\:gap-12 {

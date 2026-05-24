@@ -132,7 +132,7 @@ function Hero() {
             </h1>
 
             <p className="animate-fade-in-d2 text-base text-text2 leading-relaxed mb-8 max-w-md">
-              Paste a URL. auto-mcp&apos;s browser agent maps every route, captures
+              Paste a URL. Gichku&apos;s browser agent maps every route, captures
               every endpoint, and ships a typed Python MCP server—without you
               writing a single line of code.
             </p>
@@ -152,17 +152,6 @@ function Hero() {
                 Generate →
               </button>
             </form>
-
-            <div className="animate-fade-in-d2 flex items-center justify-center lg:justify-start gap-4 mb-5">
-              <a
-                href="https://github.com/VarunGuptaPy/auto-mcp"
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm font-medium text-text2 hover:text-text1 transition-colors flex items-center gap-1.5"
-              >
-                <GithubIcon /> View on GitHub
-              </a>
-            </div>
 
             <p className="animate-fade-in-d3 text-xs text-muted">
               Free to start · No credit card · 5 servers/month on free tier
@@ -226,7 +215,7 @@ function DemoVideo() {
           <div className="flex-1 flex justify-center">
             <div className="flex items-center gap-2 bg-bg border border-border rounded-md px-3 py-1 text-xs text-muted font-mono w-60">
               <LockIcon />
-              auto-mcp.dev · live demo
+              gichku.com · live demo
             </div>
           </div>
         </div>
@@ -234,7 +223,7 @@ function DemoVideo() {
           <iframe
             className="absolute inset-0 w-full h-full"
             src="https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0&modestbranding=1&color=white"
-            title="auto-mcp live demo"
+            title="Gichku live demo"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
@@ -273,7 +262,7 @@ function HeroMockup() {
           <div className="flex-1 flex justify-center">
             <div className="flex items-center gap-1.5 bg-bg border border-border rounded-md px-2.5 py-0.5 text-[11px] text-muted font-mono w-52">
               <LockIcon />
-              auto-mcp.dev/jobs/f7a2c1
+              gichku.com/jobs/f7a2c1
             </div>
           </div>
         </div>
@@ -465,7 +454,7 @@ const HOW_STEPS = [
     n: "01",
     icon: <StepLinkIcon />,
     title: "Paste any URL",
-    body: "SaaS app, internal tool, public website. If a browser can load it, auto-mcp can map it. Optionally attach a GitHub repo for deeper coverage.",
+    body: "SaaS app, internal tool, public website. If a browser can load it, Gichku can map it.",
     tag: "< 10 seconds",
   },
   {
@@ -590,7 +579,7 @@ function HowItWorks() {
 
 function StepAnim1() {
   const [chars, setChars] = useState(0);
-  const url = "https://github.com";
+  const url = "https://my-app.com";
   useEffect(() => {
     setChars(0);
     const t = setInterval(() => setChars((c) => (c < url.length ? c + 1 : c)), 65);
@@ -650,7 +639,7 @@ function StepAnim2() {
         </div>
         <div className="flex-1 flex justify-center">
           <div className="bg-bg border border-border rounded-md px-3 py-0.5 text-[11px] font-mono text-muted">
-            github.com/api/…
+            my-app.com/api/…
           </div>
         </div>
       </div>
@@ -681,7 +670,7 @@ function StepAnim2() {
 
 function StepAnim3() {
   const lines = [
-    { color: "text-muted",   text: "# auto-mcp generated · server.py" },
+    { color: "text-muted",   text: "# Gichku generated · server.py" },
     { color: "text-accent",  text: "from mcp import FastMCP" },
     { color: "text-text2",   text: "" },
     { color: "text-accent",  text: "@mcp.tool()" },
@@ -753,7 +742,7 @@ function CodePreview() {
             <span className="text-gradient-accent">in seconds.</span>
           </h2>
           <p className="text-text2 leading-relaxed mb-8">
-            auto-mcp doesn&apos;t generate boilerplate—it generates a real,
+            Gichku doesn&apos;t generate boilerplate—it generates a real,
             typed MCP server with docstrings, auth, and a working config snippet.
           </p>
           <ul className="space-y-3">
@@ -790,7 +779,7 @@ function CodePreview() {
             <div className="p-5 font-mono text-[11.5px] leading-relaxed overflow-x-auto bg-bg">
               <pre className="whitespace-pre">
                 <CodeLine>
-                  <span className="text-muted"># auto-mcp generated · github.com/api</span>
+                  <span className="text-muted"># Gichku generated · server.py</span>
                 </CodeLine>
                 <CodeLine>
                   <span className="text-accent">from</span>
@@ -801,7 +790,7 @@ function CodePreview() {
                 <CodeLine>{""}</CodeLine>
                 <CodeLine>
                   <span className="text-text2">mcp = FastMCP(</span>
-                  <span className="text-success">&quot;GitHub API&quot;</span>
+                  <span className="text-success">&quot;My API&quot;</span>
                   <span className="text-text2">)</span>
                 </CodeLine>
                 <CodeLine>{""}</CodeLine>
@@ -918,7 +907,7 @@ function BentoFeatures() {
               </div>
             </div>
             <p className="text-sm text-text2 leading-relaxed mb-5">
-              Connect a GitHub repo and auto-mcp reads your source code.
+              Connect a repo and Gichku reads your source code.
               It finds routes the browser never visits, detects required env
               vars, and builds a richer MCP server than any scraper can.
             </p>
@@ -937,7 +926,7 @@ function BentoFeatures() {
             <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Privacy-first</h3>
             <p className="text-sm text-text2 leading-relaxed">
               Source code is analyzed locally. Nothing leaves your machine.
-              GitHub tokens are in-memory only—never written to disk, never logged.
+              API tokens are in-memory only—never written to disk, never logged.
             </p>
             <div className="mt-4 flex flex-col gap-1.5">
               {["Token never persisted", "ChromaDB runs locally", "No third-party data sharing"].map((t) => (
@@ -983,7 +972,7 @@ function BentoFeatures() {
               <BentoIcon><GlobeIcon /></BentoIcon>
               <h3 className="text-sm font-bold text-text1 mt-4 mb-2">Any site</h3>
               <p className="text-xs text-text2 leading-relaxed">
-                SaaS, dashboards, REST, GraphQL, SPAs—if a browser loads it, auto-mcp maps it.
+                SaaS, dashboards, REST, GraphQL, SPAs—if a browser loads it, Gichku maps it.
               </p>
             </div>
             <div className="mt-5 text-3xl font-black text-gradient-accent">∞</div>
@@ -1018,14 +1007,13 @@ function Pricing() {
             <div className="flex items-end gap-1.5 mb-1">
               <span className="text-5xl font-black text-text1">$0</span>
             </div>
-            <p className="text-sm text-text2 mb-8">Everything you need to try auto-mcp.</p>
+            <p className="text-sm text-text2 mb-8">Everything you need to try Gichku.</p>
             <ul className="space-y-3 mb-8">
               {[
                 ["5 MCP servers / month", true],
                 ["Up to 50 steps per job", true],
                 ["Browser exploration", true],
                 ["Download as .zip", true],
-                ["GitHub code analysis", false],
                 ["Priority queue", false],
               ].map(([label, ok]) => (
                 <li key={String(label)} className="flex items-center gap-3 text-sm">
@@ -1064,7 +1052,7 @@ function Pricing() {
 
             <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-5">Pro</p>
             <div className="flex items-end gap-1.5 mb-1">
-              <span className="text-5xl font-black text-text1">$19</span>
+              <span className="text-5xl font-black text-text1">$4.99</span>
               <span className="text-text2 text-sm mb-2">/month</span>
             </div>
             <p className="text-sm text-text2 mb-8">For developers who ship.</p>
@@ -1074,7 +1062,6 @@ function Pricing() {
                 "Unlimited steps",
                 "Browser exploration",
                 "Download as .zip",
-                "GitHub code analysis",
                 "Priority queue",
                 "Email support",
               ].map((label) => (
@@ -1097,8 +1084,8 @@ function Pricing() {
 
         <p className="text-center text-xs text-muted mt-8">
           14-day money-back guarantee · Questions?{" "}
-          <a href="mailto:hello@auto-mcp.dev" className="text-accent hover:text-accent-h">
-            hello@auto-mcp.dev
+          <a href="mailto:hello@gichku.com" className="text-accent hover:text-accent-h">
+            hello@gichku.com
           </a>
         </p>
       </div>
@@ -1131,14 +1118,6 @@ function CtaBanner() {
                 >
                   Get started free →
                 </Link>
-                <a
-                  href="https://github.com/VarunGuptaPy/auto-mcp"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-[15px] font-semibold text-text2 hover:text-text1 transition-colors"
-                >
-                  <GithubIcon /> Star on GitHub
-                </a>
               </div>
             </div>
 
@@ -1173,10 +1152,10 @@ function CtaBanner() {
 
                 {/* Code content */}
                 <div className="p-4 font-mono text-[11px] leading-[1.65] bg-bg space-y-0.5">
-                  <div className="text-muted"># auto-mcp generated · github.com/api</div>
+                  <div className="text-muted"># Gichku generated · server.py</div>
                   <div className="text-muted">from mcp import FastMCP</div>
                   <div className="h-2" />
-                  <div className="text-accent">mcp = FastMCP(&quot;GitHub API&quot;)</div>
+                  <div className="text-accent">mcp = FastMCP(&quot;My API&quot;)</div>
                   <div className="h-2" />
                   <div><span className="text-accent">@mcp.tool()</span></div>
                   <div><span className="text-accent">async def</span> <span className="text-text1">list_repos</span><span className="text-text2">(org: str) -&gt; list:</span></div>
@@ -1297,10 +1276,3 @@ function GlobeIcon() {
   );
 }
 
-function GithubIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-    </svg>
-  );
-}

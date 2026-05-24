@@ -183,8 +183,10 @@ class AgentEventRequest(BaseModel):
 # API routes
 # --------------------------------------------------------------------------- #
 
+_JOB_RATE_LIMIT = os.environ.get("JOB_RATE_LIMIT", "20/minute")
+
 @app.post("/api/jobs", response_model=CreateJobResponse)
-@limiter.limit("1/5minutes")
+@limiter.limit(_JOB_RATE_LIMIT)
 async def create_job(request: Request, body: CreateJobRequest):
     """Submit a URL for exploration. Rate-limited, SSRF-validated."""
     # 1 — URL length guard (before the more expensive DNS check)
